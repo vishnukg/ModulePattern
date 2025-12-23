@@ -1,14 +1,14 @@
 {
-    "name": "modulepattern",
-    "version": "1.0.0",
-    "description": "",
-    "main": "index.js",
-    "type": "module",
-    "scripts": {
-        "go": "node src/index.js",
-        "test": "node --test ./test/reservation.test.js"
-    },
-    "keywords": [],
-    "author": "",
-    "license": "ISC"
+  "name": "modulepattern",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "go": "node src/index.js",
+    "test": "node --test ./test/**/*.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }

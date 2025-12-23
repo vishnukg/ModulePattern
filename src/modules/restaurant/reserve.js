@@ -1,4 +1,5 @@
-export default () =>
+export default ({ db }) =>
   ({ quantity, date }) => {
-    return quantity;
+    // buisness logic
+    return db.saveReservation({ quantity, date });
   };
