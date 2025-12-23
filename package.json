@@ -3,12 +3,12 @@
     "version": "1.0.0",
     "description": "",
     "main": "index.js",
+    "type": "module",
     "scripts": {
         "go": "node src/index.js",
-        "test": "echo \"Error: no test specified\" && exit 1"
+        "test": "node --test ./test/reservation.test.js"
     },
     "keywords": [],
     "author": "",
-    "license": "ISC",
-    "type": "commonjs"
+    "license": "ISC"
 }
