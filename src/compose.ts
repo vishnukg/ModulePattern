@@ -1,4 +1,4 @@
-import modules from "./modules/index.js";
+import modules from "./modules/index.ts";
 
 export default ({ config }) => {
   // the pattern is you first call the outerfunction with dependencies

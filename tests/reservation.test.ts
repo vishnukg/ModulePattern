@@ -1,4 +1,4 @@
-import compose from "../src/compose.js";
+import compose from "../src/compose.ts";
 
 import test from "node:test";
 import assert from "node:assert/strict";
