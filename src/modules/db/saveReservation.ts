@@ -1,4 +1,4 @@
-import type { Reservation } from "./types.ts";
+import type { Reservation } from "../types.ts";
 
 export default () => {
   // in memory db for now

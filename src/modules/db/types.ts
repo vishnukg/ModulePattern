@@ -1,4 +1,4 @@
-export type Reservation = { quantity: number; date: string };
+import type { Reservation } from "../types.ts";
 
 export type DB = {
   saveReservation: (reservation: Reservation) => Reservation[];
