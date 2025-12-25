@@ -1,17 +1,19 @@
 {
-    "name": "modulepattern",
-    "version": "1.0.0",
-    "description": "",
-    "main": "index.js",
-    "type": "module",
-    "scripts": {
-        "go": "node src/index.js",
-        "test": "node --test ./tests/**/*.ts"
-    },
-    "keywords": [],
-    "author": "",
-    "license": "ISC",
-    "devDependencies": {
-        "@types/node": "^25.0.3"
-    }
+  "name": "modulepattern",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "go": "node src/index.js",
+    "test": "vitest run --coverage"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^25.0.3",
+    "@vitest/coverage-v8": "^4.0.16",
+    "vitest": "^4.0.16"
+  }
 }

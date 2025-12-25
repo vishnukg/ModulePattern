@@ -1,2 +1,2 @@
-export type restaurantConfig = { tableSize: number };
-export type ComposeConfig = { restaurantConfig: restaurantConfig };
+export type restaurantCfg = { tableSize: number };
+export type ComposeCfg = { restaurantCfg: restaurantCfg };

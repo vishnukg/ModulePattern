@@ -1,16 +1,16 @@
 import type { DB } from "../db/types.ts";
-import type { restaurantConfig } from "../types.ts";
+import type { restaurantCfg } from "../types.ts";
 
 export default ({
     db,
-    restaurantConfig,
+    restaurantCfg,
   }: {
     db: DB;
-    restaurantConfig: restaurantConfig;
+    restaurantCfg: restaurantCfg;
   }) =>
   ({ quantity, date }: { quantity: number; date: string }) => {
     // buisness logic
-    if (quantity <= restaurantConfig.tableSize) {
+    if (quantity <= restaurantCfg.tableSize) {
       db.saveReservation({ quantity, date });
       return "Accepted";
     } else {
