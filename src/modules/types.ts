@@ -1,8 +1,3 @@
-export type Reservation = { quantity: number; date: string };
-export type DB = {
-  saveReservation: (reservation: Reservation) => Reservation[];
-};
-export type RestaurantCfg = { tableSize: number };
+import type { RestaurantCfg } from "./restaurant/types.ts";
 
-export type ReserveCfg = { db: DB; restaurantCfg: RestaurantCfg };
 export type ComposeCfg = { restaurantCfg: RestaurantCfg };

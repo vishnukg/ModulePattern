@@ -1,4 +1,4 @@
-import type { Reservation, ReserveCfg } from "../types.ts";
+import type { Reservation, ReserveCfg } from "./types.ts";
 
 export default ({ db, restaurantCfg }: ReserveCfg) =>
   ({ quantity, date }: Reservation) => {
