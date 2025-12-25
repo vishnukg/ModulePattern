@@ -1,6 +1,7 @@
 import modules from "./modules/index.ts";
+import type { ComposeConfig } from "./modules/types.ts";
 
-export default ({ config }) => {
+export default ({ restaurantConfig }: ComposeConfig) => {
   // the pattern is you first call the outerfunction with dependencies
   // so it returns the inner function which can be used
   // we then wrap the innner function in a object which is then added to the compose object
@@ -11,7 +12,7 @@ export default ({ config }) => {
   // we still wrap db in an object and pass it to reserve,
   // because reserve can have multiple dependencies and db is
   // just one of them
-  const reserve = modules.restaurant.reserve({ db, config });
+  const reserve = modules.restaurant.reserve({ db, restaurantConfig });
   const restaurant = { reserve };
   return { restaurant };
 };
