@@ -32,15 +32,15 @@ const y = "hello";  // TypeScript infers: string
 Both describe the shape of an object.
 
 ```ts
-type Reservation = { quantity: number; date: string };
+type Reservation = { id: string; quantity: number; date: string };
 
 interface Logger {
-  info: (message: string) => void;
+  info: (message: string, data?: Record<string, unknown>) => void;
 }
 ```
 
 In this project:
-- `type` is used for data shapes (`Reservation`, `RestaurantCfg`, config objects)
+- `type` is used for data shapes (`Reservation`, `ReservationInput`, `RestaurantCfg`, config objects)
 - `interface` is used when multiple implementations are expected (`Logger`, `Metrics`, `FakeMetrics`)
 
 `import type` imports a type without including any runtime code:
@@ -70,34 +70,42 @@ first(["a", "b", "c"]); // TypeScript infers T = string, returns string
 You almost never need to write the type explicitly — TypeScript infers it
 from what you pass in.
 
-The container uses three generics at once: `T`, `K`, and `V`:
+In this project generics appear in the `DB` interface — `Promise<T>` means
+"an async operation that resolves to `T`":
 
 ```ts
-add<K extends string, V>(name: K, factory: (services: T) => V)
-// T = services registered so far (comes from Container<T>)
-// K = name of the new service (inferred from the string you pass)
-// V = type of the new service (inferred from what your factory returns)
+// src/modules/restaurant/types.ts
+export type DB = {
+  saveReservation:   (input: ReservationInput) => Promise<Reservation>;
+  getReservations:   () => Promise<Reservation[]>;
+  cancelReservation: (id: string) => Promise<boolean>;
+  updateReservation: (id: string, input: ReservationInput) => Promise<Reservation | null>;
+};
 ```
+
+`Promise<Reservation>` means "resolves to a `Reservation`".
+`Promise<Reservation | null>` means "resolves to either a `Reservation` or `null`".
 
 ---
 
-## 4. Generic constraints — `extends`
+## 4. Union types — `A | B`
 
-`K extends string` means "K must be a subtype of string".
-Without it, someone could pass a number as a key, which would break things.
+The `|` operator means "one of these types". TypeScript forces you to
+handle every possibility before you can use the value.
 
 ```ts
-function getProperty<T, K extends keyof T>(obj: T, key: K): T[K] {
-  return obj[key];
-}
+type Result = "Accepted" | "Rejected";
 
-const user = { name: "Alice", age: 30 };
-getProperty(user, "name"); // ✓ — "name" is a key of user
-getProperty(user, "foo");  // ✗ — compile error: "foo" is not a key of user
+const handle = (result: Result) => {
+  if (result === "Accepted") { /* ... */ }
+  if (result === "Rejected") { /* ... */ }
+};
 ```
 
-In the container, `K extends string` ensures service names are always
-strings, which is required for object keys.
+This project uses union types as domain return values — `reserve` returns
+`"Accepted" | "Rejected"`, `cancel` returns `"Cancelled" | "NotFound"`, and so on.
+Using string literals instead of booleans makes code self-documenting and
+exhaustive — TypeScript will warn if you forget a case.
 
 ---
 
@@ -109,14 +117,17 @@ with keys of type `K` and values of type `V`.
 ```ts
 type Scores = Record<string, number>;
 const scores: Scores = { alice: 95, bob: 88 }; // ✓
-
-// with a literal key — TypeScript knows the exact key name
-type SaveFn = Record<"saveReservation", (r: Reservation) => void>;
-// equivalent to: { saveReservation: (r: Reservation) => void }
 ```
 
-The container return type uses `Record<K, V>` to represent the newly
-added service, then merges it into the existing type with `&`.
+This project uses `Record` in the `Logger` interface and in `fakeMetrics`:
+
+```ts
+// Logger methods accept optional metadata as Record<string, unknown>
+info: (message: string, data?: Record<string, unknown>) => void;
+
+// fakeMetrics stores counters as Record<string, number>
+const counters: Record<string, number> = {};
+```
 
 ---
 
@@ -130,9 +141,18 @@ type B = { age: number };
 type C = A & B; // { name: string; age: number }
 ```
 
-The container's `.add()` return type is `Container<T & Record<K, V>>`:
-the old services `T` merged with the new service `Record<K, V>`.
-TypeScript tracks this growing type across every `.add()` call.
+This project uses intersection via `{ id: string, ...input }` — the
+`Reservation` type has an `id` field on top of `ReservationInput`:
+
+```ts
+type ReservationInput = { quantity: number; date: string };
+type Reservation      = { id: string; quantity: number; date: string };
+
+// In makeInMemoryDb:
+const reservation: Reservation = { id: randomUUID(), ...input };
+//                                  ^^^^^^^^^^^^^^^^^^^^^^^^^
+//                                  merges id with all input fields
+```
 
 ---
 
@@ -155,3 +175,7 @@ interface FakeMetrics extends Metrics {
 
 `FakeMetrics` satisfies the `Metrics` contract — you can pass it anywhere
 `Metrics` is expected. This is how test doubles work in this project.
+
+`makeFakeMetrics` (in `tests/helpers/fakeMetrics.ts`) returns a `FakeMetrics`.
+The production code receives it typed as `Metrics` — it has no idea the
+test double is storing counters internally.

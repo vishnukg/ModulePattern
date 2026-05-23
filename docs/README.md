@@ -5,35 +5,31 @@ Start here, then read the files in order.
 | File | What it covers |
 |---|---|
 | [01-fp-concepts.md](./01-fp-concepts.md) | Functions as values, pure functions, closures, immutability, currying |
-| [02-typescript.md](./02-typescript.md) | Type annotations, generics, constraints, `Record`, intersection types |
-| [03-patterns.md](./03-patterns.md) | Module pattern, container, `compose.ts`, testing, lifetimes, ES modules |
+| [02-typescript.md](./02-typescript.md) | Type annotations, generics, `Record`, intersection types, `interface` extension |
+| [03-patterns.md](./03-patterns.md) | The `make*` pattern, `compose.ts`, testing strategy, ES modules |
 | [04-cross-cutting.md](./04-cross-cutting.md) | Logging and metrics — interfaces, implementations, wiring, testing |
-| [05-going-deeper.md](./05-going-deeper.md) | `this` binding bug, clean code structure, immutability performance |
+| [05-going-deeper.md](./05-going-deeper.md) | `this` binding, immutability performance, clean code structure |
+| [06-dynamodb.md](./06-dynamodb.md) | DynamoDB + LocalStack — async DB interface, env-based switching |
+| [07-design-principles.md](./07-design-principles.md) | All 14 design principles applied in this codebase |
+| [08-tsconfig-modules.md](./08-tsconfig-modules.md) | Module resolution — `nodenext` vs `bundler`, when to use each |
+| [09-production-build.md](./09-production-build.md) | Native Node.js execution, optional tsup build, debugging, CI sequence |
+
+---
 
 ## Quick reference
 
 | Concept | Where it appears |
 |---|---|
-| Functions as values | Every module — functions are stored, passed, returned |
-| Pure functions | `reserve.ts` — same input always gives same output |
-| Closures | `saveReservation.ts` — private `reservations[]` array |
-| Immutability | `container.ts` — each `.add()` creates a new object |
-| Currying | Every module — outer takes deps, inner does work |
-| Generics `<T>` | `container.ts` — tracks registered services |
-| Constraints `extends` | `container.ts` — `K extends string` enforces key names |
-| `Record<K, V>` | `container.ts` — represents a single added service |
-| Intersection `A & B` | `container.ts` — merges old services with new |
-| Module pattern | `src/modules/**` — each file is one curried function |
-| Container pattern | `src/container.ts` + `src/compose.ts` — wires modules |
-| DI via arguments | All modules — deps received as args, never imported directly |
-| Singleton lifetime | Container — one instance per `compose()` call |
-| ESM singleton | Module cache — one instance per process |
-| Transient lifetime | Export a factory function from a module |
-| `this` binding bug | Class methods — lost when passed as callbacks |
-| No `this` bug | Functional — deps in closure, not on object |
-| Clean structure | One function per file, types co-located, deps flow through compose |
-| Structural sharing | Spread copies references (8 bytes), not values |
-| Cross-cutting concern | `Logger`, `Metrics` — injected as deps, not imported |
-| `interface` | Defines contract for multiple implementations |
-| `FakeMetrics extends Metrics` | Test double that satisfies the interface + exposes inspection |
-| Silent logger | Suppresses output in tests without changing business logic |
+| `make*(deps)` factory pattern | Every module — outer takes deps, inner does work |
+| Dependency Inversion Principle | `DB` interface in `restaurant/types.ts`, implemented in `db/` |
+| Ports and adapters | `DB`, `Logger`, `Metrics` are ports; `makeDynamoDb` etc. are adapters |
+| Inward dependency rule | `db/` depends on `restaurant/` — never the other way |
+| Composition root | `src/compose.ts` — all wiring in one place |
+| Functional DI | `makeReserve({ db, logger, metrics })` — deps as parameters |
+| Stubs vs mocks | Stubs: plain objects; mocks: `vi.fn()` only when asserting on calls |
+| AAA test pattern | Every test — Arrange / Act / Assert, no shared `beforeEach` state |
+| Barrel files | `src/modules/*/index.ts` — named exports, controls public API |
+| Async at the boundary | `DB` interface is always async even for in-memory |
+| Test infrastructure | `tests/helpers/` — not in `src/` |
+| Source maps | `tsup.config.ts` `sourcemap: true` + `node --enable-source-maps` |
+| Module resolution | `moduleResolution: "bundler"` — correct for `tsx` and `tsup` |

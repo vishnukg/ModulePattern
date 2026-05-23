@@ -49,8 +49,9 @@ const push = (x: number) => items.push(x); // modifies `items`
 Pure functions are easier to test because you don't need to set up any
 external state — just call them and check the return value.
 
-Most functions in this project are pure. `saveReservation` is the exception —
-it mutates an array inside its closure, which is intentional (simulating a DB).
+Most functions in this project are pure. `makeInMemoryDb` is the exception —
+it mutates an array inside its closure (`store.push(reservation)`), which is
+intentional (simulating a real database that persists writes).
 
 ---
 
@@ -80,22 +81,27 @@ counter.value(); // 2
 `count` lives in the closure of `makeCounter`. The returned object is the
 only way to interact with it. This is **encapsulation without classes**.
 
-`saveReservation.ts` uses this exact pattern:
+`makeInMemoryDb` uses this exact pattern:
 
 ```ts
-export default ({ logger }: DBCfg) => {
-  const reservations: Reservation[] = []; // private, lives in the closure
+// src/modules/db/makeInMemoryDb.ts
+const makeInMemoryDb = ({ logger }: InMemoryDbCfg): DB => {
+  const store: Reservation[] = []; // private, lives in the closure
 
-  return (reservation: Reservation) => {
-    logger.info("saving reservation", { ...reservation });
-    reservations.push(reservation);
-    return reservations;
+  const saveReservation = async (input: ReservationInput): Promise<Reservation> => {
+    const reservation = { id: randomUUID(), ...input };
+    store.push(reservation);       // mutates the private store
+    return reservation;
   };
+
+  const getReservations = async (): Promise<Reservation[]> => [...store];
+
+  return { saveReservation, getReservations, cancelReservation, updateReservation };
 };
 ```
 
-Every time you call the outer function you get a fresh, isolated
-`reservations` array. Two calls to the outer function never share state.
+Every time you call `makeInMemoryDb` you get a fresh, isolated `store` array.
+Two calls to `makeInMemoryDb` never share state — critical for test isolation.
 
 ---
 
@@ -129,8 +135,9 @@ const updatedUser = { ...user, age: 31 };
 The `...` is the **spread operator** — it copies all fields from the original
 into a new object, then you override the fields you want to change.
 
-The container in this project uses this pattern. Each `.add()` call
-creates a brand-new container object rather than modifying the existing one.
+`makeInMemoryDb` uses this for `getReservations` — it returns `[...store]`
+(a copy) rather than the internal array, so callers cannot accidentally
+mutate the database state.
 
 ---
 
@@ -140,23 +147,35 @@ creates a brand-new container object rather than modifying the existing one.
 pattern is always:
 
 ```
-outer(dependencies) → inner(runtimeArgs) → result
+make*(dependencies) → operation(runtimeArgs) → result
 ```
 
-The outer call configures the function once (at startup).
-The inner call does the actual work (at request time).
+The outer `make*` call configures the function once (at startup).
+The inner function is what's called at runtime (once per request).
 
 ```ts
-// reserve.ts
-export default ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => // outer: inject deps once
-  ({ quantity, date }: Reservation) => {                                // inner: called per request
+// src/modules/restaurant/reserve.ts
+const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
+  const reserve = async ({ quantity, date }: ReservationInput): Promise<"Accepted" | "Rejected"> => {
     if (quantity <= restaurantCfg.tableSize) {
-      db.saveReservation({ quantity, date });
+      await db.saveReservation({ quantity, date });
       return "Accepted";
     }
     return "Rejected";
   };
+  return reserve;
+};
 ```
 
 `reserve` does not import `db` — it receives it as an argument. This means
 in tests you can pass a fake `db` without touching real infrastructure.
+
+`compose.ts` calls all the `make*` functions once at startup, wires the
+results together, and hands them to the HTTP layer:
+
+```ts
+const reserve    = makeReserve({ db, logger, metrics, restaurantCfg });
+const cancel     = makeCancel({ db, logger, metrics });
+const update     = makeUpdate({ db, logger, metrics, restaurantCfg });
+const restaurant = makeRestaurant({ reserve, cancel, update, getReservations: db.getReservations });
+```

@@ -1,17 +1,35 @@
-import type { DB, Reservation } from "../restaurant/types.ts";
-import type { InMemoryDbCfg }   from "./types.ts";
+import { randomUUID }                                    from "node:crypto";
+import type { DB, Reservation, ReservationInput }        from "../restaurant/types.ts";
+import type { InMemoryDbCfg }                            from "./types.ts";
 
 const makeInMemoryDb = ({ logger }: InMemoryDbCfg): DB => {
-  const reservations: Reservation[] = [];
+  const store: Reservation[] = [];
 
-  const saveReservation = async (reservation: Reservation): Promise<void> => {
-    logger.info("saving reservation", { quantity: reservation.quantity, date: reservation.date });
-    reservations.push(reservation);
+  const saveReservation = async (input: ReservationInput): Promise<Reservation> => {
+    const reservation: Reservation = { id: randomUUID(), ...input };
+    logger.info("saving reservation", { id: reservation.id, quantity: input.quantity, date: input.date });
+    store.push(reservation);
+    return reservation;
   };
 
-  const getReservations = async (): Promise<Reservation[]> => [...reservations];
+  const getReservations = async (): Promise<Reservation[]> => [...store];
 
-  return { saveReservation, getReservations };
+  const cancelReservation = async (id: string): Promise<boolean> => {
+    const index = store.findIndex(r => r.id === id);
+    if (index === -1) return false;
+    store.splice(index, 1);
+    return true;
+  };
+
+  const updateReservation = async (id: string, input: ReservationInput): Promise<Reservation | null> => {
+    const index = store.findIndex(r => r.id === id);
+    if (index === -1) return null;
+    const updated: Reservation = { id, ...input };
+    store[index] = updated;
+    return updated;
+  };
+
+  return { saveReservation, getReservations, cancelReservation, updateReservation };
 };
 
 export default makeInMemoryDb;

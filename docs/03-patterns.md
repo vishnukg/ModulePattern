@@ -1,195 +1,175 @@
 # The Patterns in This Project
 
-How the module pattern, container, and compose fit together.
+How the `make*` factory pattern, barrel files, and `compose.ts` fit together.
 
 ---
 
-## 1. The module pattern
+## 1. The `make*` factory pattern
 
-Each module is a file that exports a single curried function:
+Every operation in this project is built by a `make*` function:
 
 ```
-outer(dependencies) → inner(runtimeArgs) → result
+make*(dependencies) → operation(runtimeArgs) → result
 ```
 
-The outer function is called once during wiring (in `compose.ts`).
-The inner function is what's used at runtime.
+The `make*` function is called once during wiring (in `compose.ts`).
+The returned operation is what's called at runtime — once per request.
 
 ```ts
 // src/modules/restaurant/reserve.ts
-export default ({ db, restaurantCfg, logger, metrics }: ReserveCfg) =>
-  ({ quantity, date }: Reservation) => {
-    // business logic here
+const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
+  const reserve = async ({ quantity, date }: ReservationInput): Promise<"Accepted" | "Rejected"> => {
+    if (quantity <= restaurantCfg.tableSize) {
+      await db.saveReservation({ quantity, date });
+      return "Accepted";
+    }
+    return "Rejected";
   };
-```
-
-Each module barrel (`index.ts`) collects the functions in a namespace:
-
-```ts
-// src/modules/restaurant/index.ts
-import reserve from "./reserve.ts";
-export default { reserve };
-
-// src/modules/index.ts
-import restaurant from "./restaurant/index.ts";
-import db from "./db/index.ts";
-import logger from "./logger/index.ts";
-import metrics from "./metrics/index.ts";
-export default { restaurant, db, logger, metrics };
-```
-
-`compose.ts` then accesses everything through `modules.restaurant.reserve`,
-`modules.db.saveReservation`, etc. — no long import chains.
-
----
-
-## 2. The container pattern
-
-`src/container.ts` is a small builder that wires modules together.
-
-```ts
-type Container<T> = {
-  add<K extends string, V>(
-    name: K,
-    factory: (services: T) => V
-  ): Container<T & Record<K, V>>;
-  build(): T;
+  return reserve;
 };
 ```
 
-The factory receives all services registered so far (`T`) and returns the
-new service (`V`). TypeScript grows `T` with each `.add()` call — if you
-try to use a service before registering it, you get a compile error.
+`makeReserve` does not import `db` — it receives it as a parameter. This is
+**Functional Dependency Injection**: dependencies are arguments, not imports.
+
+---
+
+## 2. Barrel files — each module's public API
+
+As a module grows beyond one file, a barrel (`index.ts`) controls what
+the outside world can see. Internal implementation files stay private.
 
 ```ts
-function make<T>(services: T): Container<T> {
-  return {
-    add(name, factory) {
-      const newService = factory(services);
-      // `as any` lets TypeScript spread a generic object — Container<T>
-      // still enforces correctness for callers.
-      const next = { ...(services as any), [name]: newService };
-      return make(next) as any;
-    },
-    build() {
-      return services;
-    },
-  };
-}
+// src/modules/restaurant/index.ts
+export { default as makeReserve }    from "./reserve.ts";
+export { default as makeCancel }     from "./makeCancel.ts";
+export { default as makeUpdate }     from "./makeUpdate.ts";
+export { default as makeRestaurant } from "./makeRestaurant.ts";
+export type { Reservation, ReservationInput, RestaurantCfg, DB, ... } from "./types.ts";
 ```
 
-Key points:
-- `make` calls itself recursively, each time with a bigger `services` object
-- Each call creates a **new** object — nothing is ever mutated
-- `services` lives in a closure, carrying the accumulated state forward
-- The `as any` casts are a TypeScript limitation; the public type is correct
+Callers import by name from the barrel:
+
+```ts
+import { makeReserve, makeCancel, makeUpdate, makeRestaurant } from "./modules/restaurant/index.ts";
+import type { RestaurantCfg, DB } from "./modules/restaurant/index.ts";
+```
+
+You can restructure internals (rename a file, split a function) without
+touching any code outside the module — only the barrel export changes.
+
+With `moduleResolution: "NodeNext"` in tsconfig, you must include `/index.ts`
+explicitly in import paths — Node.js ESM does not auto-resolve directories.
 
 ---
 
 ## 3. How `compose.ts` wires everything
 
-`compose.ts` is the only place that knows about all modules at once.
+`compose.ts` is the **composition root** — the single place that knows
+about all modules at once and wires them together.
 
 ```ts
-export default ({ restaurantCfg, logger: loggerOverride, metrics: metricsOverride }: ComposeCfg) =>
-  container()
-    .add("logger",          () => loggerOverride  ?? modules.logger.consoleLogger())
-    .add("metrics",         () => metricsOverride ?? modules.metrics.fakeMetrics())
-    .add("saveReservation", ({ logger }) => modules.db.saveReservation({ logger }))
-    .add("db",              ({ saveReservation }) => ({ saveReservation }))
-    .add("reserve",         ({ db, logger, metrics }) => modules.restaurant.reserve({ db, logger, metrics, restaurantCfg }))
-    .add("restaurant",      ({ reserve }) => ({ reserve }))
-    .build();
+// src/compose.ts
+const makeApp = ({
+  restaurantCfg,
+  logger  = makeConsoleLogger(),
+  metrics = makeNoOpMetrics(),
+  db      = makeInMemoryDb({ logger }),
+}: MakeAppCfg) => {
+  const reserve    = makeReserve({ db, logger, metrics, restaurantCfg });
+  const cancel     = makeCancel({ db, logger, metrics });
+  const update     = makeUpdate({ db, logger, metrics, restaurantCfg });
+  const restaurant = makeRestaurant({ reserve, cancel, update, getReservations: db.getReservations });
+
+  return { restaurant };
+};
 ```
 
-Reading each line:
-1. `logger` — defaults to `consoleLogger` unless an override is passed (tests pass `silentLogger`)
-2. `metrics` — defaults to `fakeMetrics` unless an override is passed
-3. `saveReservation` — outer function called with `{ logger }`, inner function stored
-4. `db` — wraps `saveReservation` into a `{ db }` namespace (matches what `reserve` expects)
-5. `reserve` — outer function called with all deps, inner function stored
-6. `restaurant` — wraps `reserve` into the public API shape
+Reading this:
+1. `logger` — defaults to `makeConsoleLogger()` unless an override is passed (tests pass `silentLogger`)
+2. `metrics` — defaults to `makeNoOpMetrics()` unless an override is passed
+3. `db` — defaults to `makeInMemoryDb` unless an override is passed (production passes `makeDynamoDb`)
+4. `reserve`, `cancel`, `update` — operations wired with all their dependencies
+5. `restaurant` — assembles operations into the public domain API
 
-The result has all services. The caller destructures only what it needs:
-```ts
-const { restaurant } = compose({ restaurantCfg: { tableSize: 12 } });
-```
+Default parameters handle the "production vs test" switching cleanly.
+No if-else chains, no environment checks inside business logic.
 
 ---
 
 ## 4. Testing
 
 Because every module receives its dependencies as arguments, testing is
-straightforward — pass fakes, call the inner function, check the result.
+straightforward — pass stubs or mocks, call the operation, check the result.
+
+**Stubs** are plain objects used when the test does not care about the
+interaction with that dependency:
 
 ```ts
-import reserve from "../src/modules/restaurant/reserve.ts";
+// tests/reserve.test.ts
+const stubDb: DB = {
+  saveReservation:   async (input) => ({ id: "stub-id", ...input }),
+  getReservations:   async () => [],
+  cancelReservation: async () => true,
+  updateReservation: async () => null,
+};
+const stubLogger: Logger   = { info: () => {}, warn: () => {}, error: () => {} };
+const stubMetrics: Metrics = { increment: () => {}, timing: () => {} };
+```
 
-it("accepts when quantity is within table size", () => {
-  const fakeDb = { saveReservation: vi.fn() };
-  const fakeLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-  const fakeMetrics = { increment: vi.fn(), timing: vi.fn() };
+**Mocks** use `vi.fn()` — only when the test needs to assert on the call
+itself (was it called? with what arguments?):
 
-  const doReserve = reserve({
-    db: fakeDb,
-    restaurantCfg: { tableSize: 10 },
-    logger: fakeLogger,
-    metrics: fakeMetrics,
-  });
+```ts
+it("calls db.saveReservation with the reservation on acceptance", async () => {
+  const mockDb: DB = {
+    ...stubDb,
+    saveReservation: vi.fn(async (input) => ({ id: "mock-id", ...input })),
+  };
+  const reserve = makeReserve({ db: mockDb, restaurantCfg: { tableSize: 10 }, logger: stubLogger, metrics: stubMetrics });
 
-  expect(doReserve({ quantity: 8, date: "2024-12-12" })).toBe("Accepted");
-  expect(fakeDb.saveReservation).toHaveBeenCalledOnce();
+  await reserve({ quantity: 8, date: "12/12/12" });
+
+  expect(mockDb.saveReservation).toHaveBeenCalledWith({ quantity: 8, date: "12/12/12" });
 });
 ```
 
-No test setup files, no mocking frameworks, no class instantiation.
-The pattern itself makes testing cheap.
+The rule: use a stub when you need a valid dep to avoid errors; use a mock
+when the test is specifically about *how* the dep is used.
+
+No test setup files, no global state, no class instantiation.
+Each test creates exactly what it needs, nothing more.
 
 ---
 
-## 5. Service lifetimes — singleton, transient, scoped
+## 5. Service lifetimes — when are services created?
 
-In a full IoC container, every registered service has a **lifetime** that
-controls when it gets created and how long it lives.
+In `compose.ts` each `make*` call runs exactly once — every service is
+a **singleton within a single `makeApp()` call**. Two calls to `makeApp()`
+produce two fully independent sets of services with no shared state.
 
-**Singleton** — created once, shared by everything that needs it.
-
-```ts
-// created once when compose() runs, shared across all uses
-.add("db", () => createDatabaseConnection())
-```
-
-**Transient** — created fresh every time it is requested.
+This is important for tests: each test that calls `makeApp()` (or wires
+modules directly) gets a fresh `db` with an empty store.
 
 ```ts
-// hypothetical: a new logger instance per injection point
-.add("logger", () => createLogger(), "transient")
+// Each call to makeApp gets a fresh in-memory store — tests never interfere
+const { restaurant: r1 } = makeApp({ restaurantCfg: { tableSize: 10 } });
+const { restaurant: r2 } = makeApp({ restaurantCfg: { tableSize: 10 } });
+// r1 and r2 are completely isolated
 ```
 
-**Scoped** — created once per scope (e.g., one HTTP request), isolated
-from other concurrent scopes.
-
-```
-Request A → scope created → db connection A → request ends → connection closed
-Request B → scope created → db connection B → request ends → connection closed
-```
-
-**What our container supports**: only singleton within a single `compose()` call.
-Every `.add()` runs its factory exactly once. Two calls to `compose()` produce
-two fully independent sets of services with no shared state.
-
-Transient and scoped lifetimes require a more complex system — a `.resolve()`
-method called at runtime, scope tokens, and teardown hooks. Full IoC containers
-(InversifyJS, tsyringe) add all of that at the cost of decorators, reflection,
-and a runtime dependency.
+Transient services (a new instance per use) and scoped services (one per
+request) require a full IoC container (InversifyJS, tsyringe). Those add
+decorators, reflection metadata, and runtime overhead. For most applications
+the simple `make*` pattern is the right tool.
 
 ---
 
-## 6. ES modules and service lifetimes
+## 6. ES modules and imports
 
-An **ES module** is any file that uses `import` or `export`. The JavaScript
-runtime caches modules — a module's top-level code runs exactly once per
-process, and every subsequent import gets the cached exports.
+This project uses native ES modules (`"type": "module"` in `package.json`).
+The JavaScript runtime caches modules — a module's top-level code runs
+exactly once per process, and every subsequent import gets the cached exports.
 
 ```ts
 // config.ts
@@ -197,35 +177,17 @@ console.log("config loaded"); // prints once, no matter how many files import th
 export const config = { port: 3000, tableSize: 12 };
 ```
 
-This is the **ES module singleton** — a process-wide singleton backed by the
-runtime, with no container needed.
+This is the **ES module singleton** — a process-wide singleton with no
+container needed.
 
-#### ESM singleton vs container singleton
-
-| | ES module singleton | Container singleton |
-|---|---|---|
-| Scope | Process-wide | Per `compose()` call |
-| Tests | Shared across all tests in a process | Each `compose()` call gets fresh services |
-| Good for | Constants, config, read-only values | Stateful services (db connections, caches) |
-
-The test file shows why container singletons matter for testing — each
-`compose()` call creates a fresh `reservations[]` closure. ESM singletons
-would share state across tests and cause interference.
-
-#### ESM for transient — export a factory
-
-```ts
-export const createLogger = (name: string) => ({
-  log: (msg: string) => console.log(`[${name}] ${msg}`),
-});
-
-// each caller gets its own logger instance
-const logger = createLogger("restaurant");
-```
+The reason `makeApp` uses default parameters rather than module-level
+constants for logger/metrics/db is test isolation: if `makeInMemoryDb()`
+were called at module scope it would be shared across all tests in the
+process. Calling it inside `makeApp` means each test call gets a fresh one.
 
 #### The `erasableSyntaxOnly` connection
 
 `"erasableSyntaxOnly": true` in `tsconfig.json` means all TypeScript is
 stripped at runtime without transformation — the output is plain ES module
 JavaScript. That is why parameter properties (`constructor(private x: T)`)
-are banned: they generate code, not just types.
+and enums are banned: they generate code, not just types.

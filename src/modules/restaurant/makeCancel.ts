@@ -1,0 +1,24 @@
+import type { CancelCfg } from "./types.ts";
+
+const makeCancel = ({ db, logger, metrics }: CancelCfg) => {
+  const cancel = async (id: string): Promise<"Cancelled" | "NotFound"> => {
+    const start = Date.now();
+    logger.info("cancellation attempt", { id });
+
+    const found = await db.cancelReservation(id);
+    metrics.timing("reservation.cancel_ms", Date.now() - start);
+
+    if (!found) {
+      logger.warn("cancellation not found", { id });
+      return "NotFound";
+    }
+
+    metrics.increment("reservation.cancelled");
+    logger.info("reservation cancelled", { id });
+    return "Cancelled";
+  };
+
+  return cancel;
+};
+
+export default makeCancel;

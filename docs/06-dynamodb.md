@@ -12,16 +12,22 @@ The `reserve` function never imports DynamoDB directly. It only knows about the
 `DB` interface:
 
 ```ts
-// src/modules/db/types.ts
+// src/modules/restaurant/types.ts  ← the domain owns this interface
 export type DB = {
-  saveReservation: (reservation: Reservation) => Promise<void>;
-  getReservations: () => Promise<Reservation[]>;
+  saveReservation:   (input: ReservationInput) => Promise<Reservation>;
+  getReservations:   () => Promise<Reservation[]>;
+  cancelReservation: (id: string) => Promise<boolean>;
+  updateReservation: (id: string, input: ReservationInput) => Promise<Reservation | null>;
 };
 ```
 
-That's it — two methods, both returning Promises. As long as something satisfies
-this shape, `reserve` doesn't care whether the data lives in memory, DynamoDB,
-PostgreSQL, or a text file.
+`DB` lives in `restaurant/types.ts` — not in `db/types.ts`. The domain defines
+what a database must be able to do; infrastructure satisfies that contract.
+This is the **Inward Dependency Rule**: `db/` imports from `restaurant/`, never
+the other way around.
+
+As long as something satisfies this shape, `reserve` doesn't care whether the
+data lives in memory, DynamoDB, PostgreSQL, or a text file.
 
 This is the **Dependency Inversion Principle** expressed in TypeScript. High-level
 code (business rules) depends on an abstraction, not a concrete implementation.
@@ -34,26 +40,46 @@ code (business rules) depends on an abstraction, not a concrete implementation.
 
 ```ts
 // src/modules/db/makeInMemoryDb.ts
-const makeInMemoryDb = ({ logger }: DBCfg): DB => {
-  const reservations: Reservation[] = [];
+const makeInMemoryDb = ({ logger }: InMemoryDbCfg): DB => {
+  const store: Reservation[] = [];
 
-  const saveReservation = async (reservation: Reservation): Promise<void> => {
-    logger.info("saving reservation", reservation);
-    reservations.push(reservation);
+  const saveReservation = async (input: ReservationInput): Promise<Reservation> => {
+    const reservation: Reservation = { id: randomUUID(), ...input };
+    store.push(reservation);
+    return reservation;
   };
 
-  const getReservations = async (): Promise<Reservation[]> => [...reservations];
+  const getReservations = async (): Promise<Reservation[]> => [...store];
 
-  return { saveReservation, getReservations };
+  const cancelReservation = async (id: string): Promise<boolean> => {
+    const index = store.findIndex(r => r.id === id);
+    if (index === -1) return false;
+    store.splice(index, 1);
+    return true;
+  };
+
+  const updateReservation = async (id: string, input: ReservationInput): Promise<Reservation | null> => {
+    const index = store.findIndex(r => r.id === id);
+    if (index === -1) return null;
+    const updated: Reservation = { id, ...input };
+    store[index] = updated;
+    return updated;
+  };
+
+  return { saveReservation, getReservations, cancelReservation, updateReservation };
 };
 ```
 
 Key things to notice:
-- `[...reservations]` returns a **copy** of the array. Callers can't accidentally
-  mutate the internal state.
-- Both methods are `async` even though there's no real I/O. The interface is
-  always async because real databases are async — we match that from day one so
-  nothing needs to change when we swap implementations.
+- `saveReservation` generates a UUID and returns the full `Reservation` (with `id`).
+  The caller (business logic) gets back the saved record — useful for responses.
+- `[...store]` in `getReservations` returns a **copy** of the array. Callers can't
+  accidentally mutate the internal state.
+- `cancelReservation` returns `boolean` (found or not). The domain layer (`makeCancel`)
+  translates that into `"Cancelled" | "NotFound"` — the DB stays neutral.
+- All methods are `async` even though there's no real I/O. The interface is always
+  async because real databases are async — we match that from day one so nothing
+  needs to change when we swap implementations.
 
 ### DynamoDB (production / LocalStack)
 
@@ -63,23 +89,37 @@ const makeDynamoDb = ({ tableName, region, endpoint, logger }: DynamoDbCfg): DB 
   const raw    = new DynamoDBClient({ region, ...(endpoint ? { endpoint } : {}) });
   const client = DynamoDBDocumentClient.from(raw);
 
-  const saveReservation = async (reservation: Reservation): Promise<void> => {
-    logger.info("saving reservation to DynamoDB", reservation);
-    await client.send(new PutCommand({
-      TableName: tableName,
-      Item: { id: randomUUID(), ...reservation },
-    }));
+  const saveReservation = async (input: ReservationInput): Promise<Reservation> => {
+    const reservation: Reservation = { id: randomUUID(), ...input };
+    await client.send(new PutCommand({ TableName: tableName, Item: reservation }));
+    return reservation;
   };
 
   const getReservations = async (): Promise<Reservation[]> => {
     const result = await client.send(new ScanCommand({ TableName: tableName }));
     return (result.Items ?? []).map(item => ({
+      id:       item.id       as string,
       quantity: item.quantity as number,
-      date:     item.date    as string,
+      date:     item.date     as string,
     }));
   };
 
-  return { saveReservation, getReservations };
+  const cancelReservation = async (id: string): Promise<boolean> => {
+    const existing = await client.send(new GetCommand({ TableName: tableName, Key: { id } }));
+    if (!existing.Item) return false;
+    await client.send(new DeleteCommand({ TableName: tableName, Key: { id } }));
+    return true;
+  };
+
+  const updateReservation = async (id: string, input: ReservationInput): Promise<Reservation | null> => {
+    const existing = await client.send(new GetCommand({ TableName: tableName, Key: { id } }));
+    if (!existing.Item) return null;
+    const updated: Reservation = { id, ...input };
+    await client.send(new PutCommand({ TableName: tableName, Item: updated }));
+    return updated;
+  };
+
+  return { saveReservation, getReservations, cancelReservation, updateReservation };
 };
 ```
 
@@ -90,6 +130,9 @@ Key things to notice:
   etc.) which is verbose.
 - Each reservation gets a random `id` (UUID) as its partition key. This lets you
   store multiple reservations for the same date/quantity without overwriting.
+- `cancelReservation` uses `GetCommand` to check existence before `DeleteCommand` —
+  DynamoDB's `DeleteCommand` silently succeeds even if the item doesn't exist, so
+  we check first to return the correct boolean.
 - The optional `endpoint` field lets you point the client at LocalStack instead of
   real AWS. When `endpoint` is `undefined`, the SDK connects to real AWS.
 
@@ -180,7 +223,7 @@ npm run server:dynamo
 
 This is equivalent to:
 ```bash
-DYNAMODB_TABLE=reservations DYNAMODB_ENDPOINT=http://localhost:4566 tsx src/server.ts
+DYNAMODB_TABLE=reservations DYNAMODB_ENDPOINT=http://localhost:4566 node src/server.ts
 ```
 
 ### 4. Test it
@@ -211,8 +254,10 @@ interface:
 ```ts
 // In reserve.test.ts
 const stubDb: DB = {
-  saveReservation: async () => {},
-  getReservations: async () => [],
+  saveReservation:   async (input) => ({ id: "stub-id", ...input }),
+  getReservations:   async () => [],
+  cancelReservation: async () => true,
+  updateReservation: async () => null,
 };
 ```
 
@@ -233,7 +278,7 @@ but are outside the scope of this learning project.
 
 | Layer         | File                        | What it does                              |
 |---------------|-----------------------------|-------------------------------------------|
-| Interface     | `src/modules/db/types.ts`   | Defines what a DB must be able to do      |
+| Interface     | `src/modules/restaurant/types.ts` | Defines what a DB must be able to do (domain port) |
 | In-memory impl | `makeInMemoryDb.ts`        | Fast, no deps — used in tests and by default |
 | DynamoDB impl | `makeDynamoDb.ts`           | Real AWS storage via DocumentClient       |
 | Wiring        | `src/compose.ts`            | Default = in-memory                       |

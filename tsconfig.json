@@ -13,9 +13,8 @@
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
-    /* Node Stuff */
+    /* NodeNext matches native Node.js ESM — explicit paths, .ts extensions allowed */
     "allowImportingTsExtensions": true,
-    "rewriteRelativeImportExtensions": true,
     "module": "NodeNext",
     "noEmit": true,
     "erasableSyntaxOnly": true,

@@ -1,8 +1,8 @@
-import express             from "express";
-import makeApp             from "./compose.ts";
-import makeConsoleLogger   from "./modules/logger/consoleLogger.ts";
-import makeDynamoDb        from "./modules/db/makeDynamoDb.ts";
-import makeRestaurantRouter from "./modules/http/makeRestaurantRouter.ts";
+import express                   from "express";
+import makeApp                   from "./compose.ts";
+import { makeConsoleLogger }     from "./modules/logger/index.ts";
+import { makeDynamoDb }          from "./modules/db/index.ts";
+import { makeRestaurantRouter }  from "./modules/http/index.ts";
 
 const port      = Number(process.env.PORT       ?? 3000);
 const tableSize = Number(process.env.TABLE_SIZE  ?? 10);
@@ -14,7 +14,7 @@ const logger = makeConsoleLogger();
 const db = process.env.DYNAMODB_TABLE
   ? makeDynamoDb({
       tableName: process.env.DYNAMODB_TABLE,
-      region:    process.env.AWS_REGION         ?? "us-east-1",
+      region:    process.env.AWS_REGION        ?? "us-east-1",
       endpoint:  process.env.DYNAMODB_ENDPOINT,
       logger,
     })

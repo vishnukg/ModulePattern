@@ -76,14 +76,14 @@ In the functional pattern there is no `this`. Dependencies live in a closure.
 The function is a standalone value that carries everything it needs.
 
 ```ts
-// after compose() wires it up:
+// after compose.ts wires it up:
 const { reserve } = restaurant;
 
-reserve({ quantity: 8, date: "2024-12-12" }); // ✓
-setTimeout(reserve, 1000);                     // ✓
-[r1, r2, r3].map(reserve);                    // ✓
+await reserve({ quantity: 8, date: "2024-12-12" }); // ✓
+setTimeout(reserve, 1000);                           // ✓
+[r1, r2, r3].map(reserve);                          // ✓
 const fn = reserve;
-fn({ quantity: 8, date: "2024-12-12" });       // ✓
+await fn({ quantity: 8, date: "2024-12-12" });       // ✓
 ```
 
 Every one of these works because `reserve` does not need any surrounding
@@ -94,53 +94,78 @@ closure — they travel with the function wherever it goes.
 
 ## 2. Clean code structure in this functional style
 
-#### One function per file
+#### One `make*` function per file
 
-Each file in `src/modules/` exports a single default curried function.
-The filename is the function name.
+Each file in `src/modules/` exports a single default `make*` function.
+The filename is the function name (minus the `make` prefix for ops,
+full name for factories).
 
 ```
-src/modules/restaurant/reserve.ts       ← exports reserve
-src/modules/db/saveReservation.ts       ← exports saveReservation
-src/modules/logger/consoleLogger.ts     ← exports consoleLogger
-src/modules/metrics/fakeMetrics.ts      ← exports fakeMetrics
+src/modules/restaurant/
+  reserve.ts        ← makeReserve
+  makeCancel.ts     ← makeCancel
+  makeUpdate.ts     ← makeUpdate
+  makeRestaurant.ts ← makeRestaurant
+  types.ts          ← Reservation, DB, RestaurantCfg, ...
+  index.ts          ← barrel (named re-exports)
+
+src/modules/db/
+  makeInMemoryDb.ts
+  makeDynamoDb.ts
+  types.ts          ← InMemoryDbCfg, DynamoDbCfg
+  index.ts
+
+src/modules/logger/
+  consoleLogger.ts
+  types.ts          ← Logger interface
+  index.ts
+
+src/modules/metrics/
+  makeNoOpMetrics.ts
+  types.ts          ← Metrics, FakeMetrics interfaces
+  index.ts
 ```
 
-If you want to find `reserve`, open `reserve.ts`. Never any ambiguity.
+If you want to find `makeCancel`, open `makeCancel.ts`. Never any ambiguity.
+
+Test helpers live outside `src/` — they are not part of the application:
+
+```
+tests/helpers/
+  fakeMetrics.ts    ← makeFakeMetrics (returns FakeMetrics)
+  silentLogger.ts   ← makeSilentLogger (returns Logger)
+```
 
 #### Types co-located with their module
 
 Types live in a `types.ts` file next to the code that owns them.
 
 ```
-src/modules/restaurant/
-  reserve.ts    ← business logic
-  types.ts      ← Reservation, RestaurantCfg, ReserveCfg
-  index.ts      ← barrel
-
-src/modules/logger/
-  consoleLogger.ts
-  silentLogger.ts
-  types.ts      ← Logger interface
-  index.ts
+src/modules/restaurant/types.ts  ← Reservation, DB, all restaurant types
+src/modules/logger/types.ts      ← Logger interface
+src/modules/metrics/types.ts     ← Metrics, FakeMetrics interfaces
+src/modules/db/types.ts          ← InMemoryDbCfg, DynamoDbCfg (infra-only types)
 ```
 
-`logger/types.ts` owns `Logger` because `logger` is the module that defines
-what a logger is. Other modules import `Logger` from there.
+`restaurant/types.ts` owns the `DB` interface because the domain defines
+what a database *must* be able to do — it's a port the domain controls.
+Infrastructure (`db/`) imports from `restaurant/types.ts` to satisfy it.
 
-#### Barrel files for namespacing
+#### Barrel files for controlled public APIs
 
-Each `index.ts` collects the module's functions under a single name:
+Each `index.ts` uses named re-exports to expose only what the module wants
+to share:
 
 ```ts
-// src/modules/logger/index.ts
-import consoleLogger from "./consoleLogger.ts";
-import silentLogger from "./silentLogger.ts";
-export default { consoleLogger, silentLogger };
+// src/modules/restaurant/index.ts
+export { default as makeReserve }    from "./reserve.ts";
+export { default as makeCancel }     from "./makeCancel.ts";
+export { default as makeUpdate }     from "./makeUpdate.ts";
+export { default as makeRestaurant } from "./makeRestaurant.ts";
+export type { Reservation, DB, ... } from "./types.ts";
 ```
 
-Callers write `modules.logger.consoleLogger()` rather than importing the
-file path directly. Namespacing makes large codebases scannable.
+Callers import by name — the internal file structure is hidden.
 
 #### Modules never import each other
 
@@ -150,33 +175,20 @@ module directly.
 ```
                compose.ts
               /     |      \
-         modules.db  modules.logger  modules.restaurant
+         modules/db  modules/logger  modules/restaurant
 ```
 
-`reserve.ts` does not `import saveReservation`. It receives `db` as an
-argument. This means you can test `reserve` without `saveReservation`
+`reserve.ts` does not import `makeInMemoryDb`. It receives `db` as an
+argument. This means you can test `reserve` without any DB implementation
 existing at all.
-
-#### Infrastructure vs domain
-
-```
-src/
-  modules/       ← domain — business logic lives here
-  container.ts   ← infrastructure — the wiring mechanism
-  compose.ts     ← infrastructure — the wiring itself
-```
-
-Domain code has no knowledge of the container. Infrastructure knows about
-both and connects them.
 
 #### Adding a new module — the exact steps
 
 1. Create `src/modules/email/types.ts` — types owned by this module
-2. Create `src/modules/email/sendConfirmation.ts` — one curried function
-3. Create `src/modules/email/index.ts` — barrel
-4. Add `email` to `src/modules/index.ts`
-5. Add `.add("sendConfirmation", ...)` and `.add("email", ...)` to `compose.ts`
-6. Update `ReserveCfg` if `reserve` needs to call `email`
+2. Create `src/modules/email/sendConfirmation.ts` — one `make*` function
+3. Create `src/modules/email/index.ts` — barrel with named exports
+4. Update `ReserveCfg` in `restaurant/types.ts` if `reserve` needs email
+5. Wire it in `compose.ts`: `const sendConfirmation = makeSendConfirmation({ logger })`
 
 The pattern is identical every time. No new concepts needed.
 
@@ -208,30 +220,6 @@ const updatedUser = { ...user, name: "Bob" };
 
 Spreading `user`: 2 reference copies = 16 bytes. The address object itself
 was not moved or copied.
-
-#### What the container actually copies
-
-Each `.add()` call does:
-
-```ts
-const next = { ...(services as any), [name]: newService };
-```
-
-`newService` is a function — a reference. `services` is an object of references.
-
-With 10 registered services (each an 8-byte function reference):
-
-```
-.add() #1  → copies 0 refs  →  1 ref stored
-.add() #2  → copies 1 ref   →  2 refs stored
-...
-.add() #10 → copies 9 refs  → 10 refs stored
-
-Total: 0+1+...+9 = 45 copies × 8 bytes = 360 bytes
-```
-
-360 bytes. Once. At startup. The 9 intermediate objects are garbage
-collected after `.build()` returns — only the final object stays alive.
 
 #### Structural sharing
 
@@ -274,5 +262,6 @@ For this case, **Immer** gives you structural sharing automatically —
 you write mutating code, Immer produces an immutable result using a
 proxy that only copies what changed.
 
-Neither case applies to this project. The container builds once at startup.
-At runtime, `reserve` returns a plain string — nothing is copied at all.
+Neither case applies to this project. Wiring in `compose.ts` happens once
+at startup. At runtime, `reserve` returns a plain string — nothing is
+spread at all.

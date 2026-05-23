@@ -16,7 +16,7 @@ out for tests, you can't silence it, and you can't easily change the
 implementation later.
 
 The functional solution: treat loggers and metrics exactly like any other
-dependency — define an interface, inject through the container, provide
+dependency — define an interface, inject through `make*` deps, provide
 different implementations for production and testing.
 
 ---
@@ -58,10 +58,9 @@ inspection methods used in tests.
 
 ## 3. Concrete implementations
 
-**Console logger** — for production:
+**Console logger** — for production (`src/modules/logger/consoleLogger.ts`):
 
 ```ts
-// src/modules/logger/consoleLogger.ts
 export default (): Logger => ({
   info: (message, data) =>
     console.log(JSON.stringify({ level: "info", message, ...data })),
@@ -72,24 +71,22 @@ export default (): Logger => ({
 });
 ```
 
-**Silent logger** — for tests, suppresses all output:
+**Silent logger** — for tests, suppresses all output (`tests/helpers/silentLogger.ts`):
 
 ```ts
-// src/modules/logger/silentLogger.ts
-export default (): Logger => ({
+const makeSilentLogger = (): Logger => ({
   info: () => {},
   warn: () => {},
   error: () => {},
 });
 ```
 
-**Fake metrics** — for tests, stores results in memory:
+**Fake metrics** — for tests, stores results in memory (`tests/helpers/fakeMetrics.ts`):
 
 ```ts
-// src/modules/metrics/fakeMetrics.ts
-export default (): FakeMetrics => {
-  const counters: Record<string, number> = {};
-  const timings: Record<string, number[]> = {};
+const makeFakeMetrics = (): FakeMetrics => {
+  const counters: Record<string, number>   = {};
+  const timings:  Record<string, number[]> = {};
 
   return {
     increment(name) {
@@ -104,9 +101,12 @@ export default (): FakeMetrics => {
 };
 ```
 
-`fakeMetrics` itself follows the module pattern — state (`counters`, `timings`)
+`makeFakeMetrics` follows the module pattern — state (`counters`, `timings`)
 lives in a closure, hidden from the outside. The returned object is the only
 way to interact with it.
+
+Test helpers live in `tests/helpers/`, **not** in `src/`. Production code
+has no knowledge they exist.
 
 ---
 
@@ -116,13 +116,13 @@ way to interact with it.
 and calls them at the right moments:
 
 ```ts
-export default ({ db, restaurantCfg, logger, metrics }: ReserveCfg) =>
-  ({ quantity, date }: Reservation) => {
+const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
+  const reserve = async ({ quantity, date }: ReservationInput) => {
     const start = Date.now();
     logger.info("reservation attempt", { quantity, date });
 
     if (quantity <= restaurantCfg.tableSize) {
-      db.saveReservation({ quantity, date });
+      await db.saveReservation({ quantity, date });
       metrics.increment("reservation.accepted");
       metrics.timing("reservation.duration_ms", Date.now() - start);
       logger.info("reservation accepted", { quantity, date });
@@ -134,6 +134,8 @@ export default ({ db, restaurantCfg, logger, metrics }: ReserveCfg) =>
     logger.warn("reservation rejected", { quantity, date, tableSize: restaurantCfg.tableSize });
     return "Rejected";
   };
+  return reserve;
+};
 ```
 
 `reserve.ts` contains no `import` for any logging library. The business
@@ -144,46 +146,57 @@ concerns are woven in via the deps object.
 
 ## 5. Wiring in compose
 
-`logger` and `metrics` are registered first so every subsequent service
-in the chain can receive them as deps:
+`logger`, `metrics`, and `db` are wired first because every subsequent
+operation depends on them. Default parameters handle the switching:
 
 ```ts
-export default ({ restaurantCfg, logger: loggerOverride, metrics: metricsOverride }: ComposeCfg) =>
-  container()
-    .add("logger",          () => loggerOverride  ?? modules.logger.consoleLogger())
-    .add("metrics",         () => metricsOverride ?? modules.metrics.fakeMetrics())
-    .add("saveReservation", ({ logger }) => modules.db.saveReservation({ logger }))
-    .add("db",              ({ saveReservation }) => ({ saveReservation }))
-    .add("reserve",         ({ db, logger, metrics }) => modules.restaurant.reserve({ db, logger, metrics, restaurantCfg }))
-    .add("restaurant",      ({ reserve }) => ({ reserve }))
-    .build();
+// src/compose.ts
+const makeApp = ({
+  restaurantCfg,
+  logger  = makeConsoleLogger(),   // production default
+  metrics = makeNoOpMetrics(),     // production default (no-op, not fake)
+  db      = makeInMemoryDb({ logger }),
+}: MakeAppCfg) => {
+  const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
+  const cancel  = makeCancel({ db, logger, metrics });
+  const update  = makeUpdate({ db, logger, metrics, restaurantCfg });
+  ...
+};
 ```
 
-`loggerOverride ?? modules.logger.consoleLogger()`:
-- If the caller passes a logger (tests do), use it
-- Otherwise default to console logger (production)
+`logger ?? makeConsoleLogger()`: if the caller passes a logger (tests do),
+use it; otherwise default to console logger (production).
 
 To swap the console logger for Pino or Winston, change one line here.
 No module file needs to change.
+
+Note: production uses `makeNoOpMetrics` (discards all metrics). To wire up
+a real metrics sink (StatsD, DataDog), implement `Metrics` and pass it to
+`makeApp` from `server.ts` — nothing else changes.
 
 ---
 
 ## 6. Testing cross-cutting concerns
 
-Create `fakeMetrics()` before `compose()`, pass the same instance in,
-and keep your reference. When `reserve` calls `metrics.increment(...)`,
+Create a `makeFakeMetrics()` instance before wiring, pass the same instance
+in, and keep your reference. When `reserve` calls `metrics.increment(...)`,
 it calls methods on *your* instance.
 
 ```ts
-it("increments reservation.accepted on a successful reservation", () => {
-  const metrics = modules.metrics.fakeMetrics();
-  const { restaurant } = compose({
+import makeFakeMetrics  from "./helpers/fakeMetrics.ts";
+import makeSilentLogger from "./helpers/silentLogger.ts";
+import makeReserve      from "../src/modules/restaurant/reserve.ts";
+
+it("increments reservation.accepted on a successful reservation", async () => {
+  const metrics = makeFakeMetrics();
+  const reserve = makeReserve({
+    db: stubDb,
     restaurantCfg: { tableSize: 12 },
-    logger: modules.logger.silentLogger(),
+    logger: makeSilentLogger(),
     metrics,
   });
 
-  restaurant.reserve({ quantity: 10, date: "12/12/12" });
+  await reserve({ quantity: 10, date: "2024-12-12" });
 
   expect(metrics.getCounter("reservation.accepted")).toBe(1);
   expect(metrics.getCounter("reservation.rejected")).toBe(0);
@@ -197,16 +210,12 @@ cast or use `as`.
 You can also assert on timing:
 
 ```ts
-it("records a timing for every attempt regardless of outcome", () => {
-  const metrics = modules.metrics.fakeMetrics();
-  const { restaurant } = compose({
-    restaurantCfg: { tableSize: 12 },
-    logger: modules.logger.silentLogger(),
-    metrics,
-  });
+it("records a timing for every attempt regardless of outcome", async () => {
+  const metrics = makeFakeMetrics();
+  const reserve = makeReserve({ db: stubDb, restaurantCfg: { tableSize: 12 }, logger: makeSilentLogger(), metrics });
 
-  restaurant.reserve({ quantity: 10, date: "12/12/12" });
-  restaurant.reserve({ quantity: 13, date: "12/12/12" });
+  await reserve({ quantity: 10, date: "2024-12-12" });
+  await reserve({ quantity: 13, date: "2024-12-12" });
 
   expect(metrics.getTimings("reservation.duration_ms")).toHaveLength(2);
 });
