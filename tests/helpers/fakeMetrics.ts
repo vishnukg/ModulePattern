@@ -1,8 +1,8 @@
-import type { FakeMetrics } from "./types.ts";
+import type { FakeMetrics } from "../../src/modules/metrics/types.ts";
 
-export default (): FakeMetrics => {
-  const counters: Record<string, number> = {};
-  const timings: Record<string, number[]> = {};
+const makeFakeMetrics = (): FakeMetrics => {
+  const counters: Record<string, number>   = {};
+  const timings:  Record<string, number[]> = {};
 
   return {
     increment(name) {
@@ -19,3 +19,5 @@ export default (): FakeMetrics => {
     },
   };
 };
+
+export default makeFakeMetrics;

@@ -1,12 +1,12 @@
 import type { Reservation, ReserveCfg } from "./types.ts";
 
-export default ({ db, restaurantCfg, logger, metrics }: ReserveCfg) =>
-  ({ quantity, date }: Reservation) => {
+const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
+  const reserve = async ({ quantity, date }: Reservation): Promise<"Accepted" | "Rejected"> => {
     const start = Date.now();
     logger.info("reservation attempt", { quantity, date });
 
     if (quantity <= restaurantCfg.tableSize) {
-      db.saveReservation({ quantity, date });
+      await db.saveReservation({ quantity, date });
       metrics.increment("reservation.accepted");
       metrics.timing("reservation.duration_ms", Date.now() - start);
       logger.info("reservation accepted", { quantity, date });
@@ -18,3 +18,8 @@ export default ({ db, restaurantCfg, logger, metrics }: ReserveCfg) =>
     logger.warn("reservation rejected", { quantity, date, tableSize: restaurantCfg.tableSize });
     return "Rejected";
   };
+
+  return reserve;
+};
+
+export default makeReserve;

@@ -1,11 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
-import consoleLogger from "../src/modules/logger/consoleLogger.ts";
+import makeConsoleLogger from "../src/modules/logger/consoleLogger.ts";
 
 describe("consoleLogger — output channel", () => {
   it("info writes to console.log", () => {
     // Arrange
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
-    const logger = consoleLogger();
+    const logger = makeConsoleLogger();
 
     // Act
     logger.info("something happened");
@@ -18,7 +18,7 @@ describe("consoleLogger — output channel", () => {
   it("warn writes to console.warn", () => {
     // Arrange
     const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const logger = consoleLogger();
+    const logger = makeConsoleLogger();
 
     // Act
     logger.warn("something degraded");
@@ -31,7 +31,7 @@ describe("consoleLogger — output channel", () => {
   it("error writes to console.error", () => {
     // Arrange
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const logger = consoleLogger();
+    const logger = makeConsoleLogger();
 
     // Act
     logger.error("something failed");
@@ -46,7 +46,7 @@ describe("consoleLogger — output format", () => {
   it("output is valid JSON", () => {
     // Arrange
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
-    const logger = consoleLogger();
+    const logger = makeConsoleLogger();
 
     // Act
     logger.info("msg");
@@ -59,7 +59,7 @@ describe("consoleLogger — output format", () => {
   it("info includes level:info and the message", () => {
     // Arrange
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
-    const logger = consoleLogger();
+    const logger = makeConsoleLogger();
 
     // Act
     logger.info("user signed in");
@@ -73,7 +73,7 @@ describe("consoleLogger — output format", () => {
   it("warn includes level:warn and the message", () => {
     // Arrange
     const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const logger = consoleLogger();
+    const logger = makeConsoleLogger();
 
     // Act
     logger.warn("rate limit approaching");
@@ -87,7 +87,7 @@ describe("consoleLogger — output format", () => {
   it("error includes level:error and the message", () => {
     // Arrange
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const logger = consoleLogger();
+    const logger = makeConsoleLogger();
 
     // Act
     logger.error("db connection lost");
@@ -101,7 +101,7 @@ describe("consoleLogger — output format", () => {
   it("extra data fields are spread into the output", () => {
     // Arrange
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
-    const logger = consoleLogger();
+    const logger = makeConsoleLogger();
 
     // Act
     logger.info("reservation made", { quantity: 4, date: "12/12/12" });

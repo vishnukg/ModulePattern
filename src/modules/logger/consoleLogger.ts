@@ -1,6 +1,6 @@
 import type { Logger } from "./types.ts";
 
-export default (): Logger => ({
+const makeConsoleLogger = (): Logger => ({
   info: (message, data) =>
     console.log(JSON.stringify({ level: "info", message, ...data })),
   warn: (message, data) =>
@@ -8,3 +8,5 @@ export default (): Logger => ({
   error: (message, data) =>
     console.error(JSON.stringify({ level: "error", message, ...data })),
 });
+
+export default makeConsoleLogger;

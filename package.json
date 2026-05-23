@@ -5,15 +5,33 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "go": "node src/index.js",
-    "test": "vitest run --coverage"
+    "cli": "tsx src/cli.ts",
+    "server": "tsx src/server.ts",
+    "server:dynamo": "DYNAMODB_TABLE=reservations DYNAMODB_ENDPOINT=http://localhost:4566 tsx src/server.ts",
+    "lint": "eslint src tests",
+    "test": "vitest run --coverage",
+    "local:up": "docker compose up -d",
+    "local:setup": "bash scripts/setup-local.sh",
+    "local:down": "docker compose down"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/express": "^5.0.6",
     "@types/node": "^25.0.3",
+    "@types/supertest": "^7.2.0",
     "@vitest/coverage-v8": "^4.0.16",
+    "eslint": "^10.4.0",
+    "supertest": "^7.2.2",
+    "tsx": "^4.22.3",
+    "typescript-eslint": "^8.59.4",
     "vitest": "^4.0.16"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1053.0",
+    "@aws-sdk/lib-dynamodb": "^3.1053.0",
+    "express": "^5.2.1"
   }
 }
