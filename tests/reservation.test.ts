@@ -1,4 +1,5 @@
 import { describe, it, expect }   from "vitest";
+import { randomUUID }              from "node:crypto";
 import makeServerApp               from "../src/server/compose.ts";
 import { makeInMemoryDb }          from "../src/modules/db/index.ts";
 import makeSilentLogger            from "./helpers/silentLogger.ts";
@@ -6,7 +7,7 @@ import makeFakeMetrics             from "./helpers/fakeMetrics.ts";
 
 const silent = () => makeSilentLogger();
 const fake   = () => makeFakeMetrics();
-const db     = () => makeInMemoryDb({ logger: makeSilentLogger() });
+const db     = () => makeInMemoryDb({ logger: makeSilentLogger(), generateId: randomUUID });
 
 describe("reservations are accepted if we have enough seats at the table", () => {
   it("reserve(10) returns Accepted", async () => {

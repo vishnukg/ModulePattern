@@ -7,7 +7,7 @@ import type { Restaurant } from "../src/modules/restaurant/types.ts";
 const makeTestApp = (restaurant: Restaurant) => {
   const app = express();
   app.use(express.json());
-  app.use("/api", makeRestaurantRouter({ restaurant }));
+  app.use("/api", makeRestaurantRouter({ restaurant, router: express.Router() }));
   return app;
 };
 

@@ -1,9 +1,6 @@
-import { Router }                          from "express";
-import type { MakeRestaurantRouterCfg }    from "./types.ts";
+import type { MakeRestaurantRouterCfg } from "./types.ts";
 
-const makeRestaurantRouter = ({ restaurant }: MakeRestaurantRouterCfg) => {
-  const router = Router();
-
+const makeRestaurantRouter = ({ restaurant, router }: MakeRestaurantRouterCfg) => {
   router.post("/reservations", async (req, res) => {
     const { quantity, date } = req.body as { quantity: unknown; date: unknown };
     if (typeof quantity !== "number" || typeof date !== "string") {

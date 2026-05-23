@@ -1,12 +1,14 @@
 import { describe, it, expect, vi } from "vitest";
-import makeInMemoryDb from "../src/modules/db/makeInMemoryDb.ts";
-import type { Logger } from "../src/modules/logger/types.ts";
+import { randomUUID }   from "node:crypto";
+import makeInMemoryDb   from "../src/modules/db/makeInMemoryDb.ts";
+import type { Logger }  from "../src/modules/logger/types.ts";
 
 const stubLogger: Logger = { info: () => {}, warn: () => {}, error: () => {} };
+const cfg = { logger: stubLogger, generateId: randomUUID };
 
 describe("makeInMemoryDb — saveReservation", () => {
   it("returns the saved reservation with a generated id", async () => {
-    const db = makeInMemoryDb({ logger: stubLogger });
+    const db = makeInMemoryDb(cfg);
     const result = await db.saveReservation({ quantity: 5, date: "12/12/12" });
     expect(result).toMatchObject({ quantity: 5, date: "12/12/12" });
     expect(typeof result.id).toBe("string");
@@ -14,7 +16,7 @@ describe("makeInMemoryDb — saveReservation", () => {
   });
 
   it("two saves produce different ids", async () => {
-    const db = makeInMemoryDb({ logger: stubLogger });
+    const db = makeInMemoryDb(cfg);
     const a = await db.saveReservation({ quantity: 2, date: "12/12/12" });
     const b = await db.saveReservation({ quantity: 3, date: "12/12/12" });
     expect(a.id).not.toBe(b.id);
@@ -23,7 +25,7 @@ describe("makeInMemoryDb — saveReservation", () => {
 
 describe("makeInMemoryDb — getReservations", () => {
   it("returns all saved reservations in order", async () => {
-    const db = makeInMemoryDb({ logger: stubLogger });
+    const db = makeInMemoryDb(cfg);
     await db.saveReservation({ quantity: 2, date: "12/12/12" });
     await db.saveReservation({ quantity: 4, date: "13/12/12" });
     const result = await db.getReservations();
@@ -33,12 +35,12 @@ describe("makeInMemoryDb — getReservations", () => {
   });
 
   it("returns an empty array when nothing has been saved", async () => {
-    const db = makeInMemoryDb({ logger: stubLogger });
+    const db = makeInMemoryDb(cfg);
     expect(await db.getReservations()).toEqual([]);
   });
 
   it("returns a copy — mutating it does not affect stored state", async () => {
-    const db = makeInMemoryDb({ logger: stubLogger });
+    const db = makeInMemoryDb(cfg);
     await db.saveReservation({ quantity: 1, date: "12/12/12" });
     const first = await db.getReservations();
     first.push({ id: "injected", quantity: 99, date: "corrupted" });
@@ -48,7 +50,7 @@ describe("makeInMemoryDb — getReservations", () => {
 
 describe("makeInMemoryDb — cancelReservation", () => {
   it("returns true and removes the reservation when found", async () => {
-    const db = makeInMemoryDb({ logger: stubLogger });
+    const db = makeInMemoryDb(cfg);
     const { id } = await db.saveReservation({ quantity: 2, date: "12/12/12" });
 
     const result = await db.cancelReservation(id);
@@ -58,12 +60,12 @@ describe("makeInMemoryDb — cancelReservation", () => {
   });
 
   it("returns false when the id does not exist", async () => {
-    const db = makeInMemoryDb({ logger: stubLogger });
+    const db = makeInMemoryDb(cfg);
     expect(await db.cancelReservation("no-such-id")).toBe(false);
   });
 
   it("only removes the matching reservation", async () => {
-    const db = makeInMemoryDb({ logger: stubLogger });
+    const db = makeInMemoryDb(cfg);
     const a = await db.saveReservation({ quantity: 2, date: "12/12/12" });
     await db.saveReservation({ quantity: 4, date: "13/12/12" });
 
@@ -77,7 +79,7 @@ describe("makeInMemoryDb — cancelReservation", () => {
 
 describe("makeInMemoryDb — updateReservation", () => {
   it("returns the updated reservation when found", async () => {
-    const db = makeInMemoryDb({ logger: stubLogger });
+    const db = makeInMemoryDb(cfg);
     const { id } = await db.saveReservation({ quantity: 2, date: "12/12/12" });
 
     const result = await db.updateReservation(id, { quantity: 5, date: "25/12/12" });
@@ -86,7 +88,7 @@ describe("makeInMemoryDb — updateReservation", () => {
   });
 
   it("reflects the update in subsequent getReservations", async () => {
-    const db = makeInMemoryDb({ logger: stubLogger });
+    const db = makeInMemoryDb(cfg);
     const { id } = await db.saveReservation({ quantity: 2, date: "12/12/12" });
     await db.updateReservation(id, { quantity: 5, date: "25/12/12" });
     const [reservation] = await db.getReservations();
@@ -94,15 +96,15 @@ describe("makeInMemoryDb — updateReservation", () => {
   });
 
   it("returns null when the id does not exist", async () => {
-    const db = makeInMemoryDb({ logger: stubLogger });
+    const db = makeInMemoryDb(cfg);
     expect(await db.updateReservation("no-such-id", { quantity: 5, date: "25/12/12" })).toBeNull();
   });
 });
 
 describe("makeInMemoryDb — isolation", () => {
   it("two instances do not share state", async () => {
-    const db1 = makeInMemoryDb({ logger: stubLogger });
-    const db2 = makeInMemoryDb({ logger: stubLogger });
+    const db1 = makeInMemoryDb(cfg);
+    const db2 = makeInMemoryDb(cfg);
     await db1.saveReservation({ quantity: 1, date: "12/12/12" });
     expect(await db2.getReservations()).toHaveLength(0);
   });
@@ -111,14 +113,14 @@ describe("makeInMemoryDb — isolation", () => {
 describe("makeInMemoryDb — logging", () => {
   it("calls logger.info once when saving", async () => {
     const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-    const db = makeInMemoryDb({ logger: mockLogger });
+    const db = makeInMemoryDb({ logger: mockLogger, generateId: randomUUID });
     await db.saveReservation({ quantity: 3, date: "12/12/12" });
     expect(mockLogger.info).toHaveBeenCalledOnce();
   });
 
   it("does not call logger.warn or logger.error when saving", async () => {
     const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-    const db = makeInMemoryDb({ logger: mockLogger });
+    const db = makeInMemoryDb({ logger: mockLogger, generateId: randomUUID });
     await db.saveReservation({ quantity: 3, date: "12/12/12" });
     expect(mockLogger.warn).not.toHaveBeenCalled();
     expect(mockLogger.error).not.toHaveBeenCalled();

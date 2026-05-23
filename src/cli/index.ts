@@ -1,4 +1,5 @@
 import { parseArgs }            from "node:util";
+import { randomUUID }           from "node:crypto";
 import makeCliApp               from "./compose.ts";
 import { makeConsoleLogger }    from "../modules/logger/index.ts";
 import { makeNoOpMetrics }      from "../modules/metrics/index.ts";
@@ -23,7 +24,7 @@ if (!values.quantity || isNaN(quantity)) {
 
 const logger  = makeConsoleLogger();
 const metrics = makeNoOpMetrics();
-const db      = makeInMemoryDb({ logger });
+const db      = makeInMemoryDb({ logger, generateId: randomUUID });
 
 const { reserve } = makeCliApp({ restaurantCfg: { tableSize: seats }, logger, metrics, db });
 const result = await reserve({ quantity, date });

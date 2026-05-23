@@ -1,15 +1,10 @@
-import { DynamoDBClient }                                                    from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, PutCommand, ScanCommand, GetCommand, DeleteCommand } from "@aws-sdk/lib-dynamodb";
-import { randomUUID }                                                         from "node:crypto";
-import type { DB, Reservation, ReservationInput }                             from "../restaurant/types.ts";
-import type { DynamoDbCfg }                                                   from "./types.ts";
+import { PutCommand, ScanCommand, GetCommand, DeleteCommand } from "@aws-sdk/lib-dynamodb";
+import type { DB, Reservation, ReservationInput }            from "../restaurant/types.ts";
+import type { DynamoDbCfg }                                  from "./types.ts";
 
-const makeDynamoDb = ({ tableName, region, endpoint, logger }: DynamoDbCfg): DB => {
-  const raw    = new DynamoDBClient({ region, ...(endpoint ? { endpoint } : {}) });
-  const client = DynamoDBDocumentClient.from(raw);
-
+const makeDynamoDb = ({ tableName, client, logger, generateId }: DynamoDbCfg): DB => {
   const saveReservation = async (input: ReservationInput): Promise<Reservation> => {
-    const reservation: Reservation = { id: randomUUID(), ...input };
+    const reservation: Reservation = { id: generateId(), ...input };
     logger.info("saving reservation to DynamoDB", { id: reservation.id, ...input });
     await client.send(new PutCommand({ TableName: tableName, Item: reservation }));
     return reservation;

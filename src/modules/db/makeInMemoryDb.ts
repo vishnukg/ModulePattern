@@ -1,12 +1,11 @@
-import { randomUUID }                                    from "node:crypto";
-import type { DB, Reservation, ReservationInput }        from "../restaurant/types.ts";
-import type { InMemoryDbCfg }                            from "./types.ts";
+import type { DB, Reservation, ReservationInput }  from "../restaurant/types.ts";
+import type { InMemoryDbCfg }                       from "./types.ts";
 
-const makeInMemoryDb = ({ logger }: InMemoryDbCfg): DB => {
+const makeInMemoryDb = ({ logger, generateId }: InMemoryDbCfg): DB => {
   const store: Reservation[] = [];
 
   const saveReservation = async (input: ReservationInput): Promise<Reservation> => {
-    const reservation: Reservation = { id: randomUUID(), ...input };
+    const reservation: Reservation = { id: generateId(), ...input };
     logger.info("saving reservation", { id: reservation.id, quantity: input.quantity, date: input.date });
     store.push(reservation);
     return reservation;
