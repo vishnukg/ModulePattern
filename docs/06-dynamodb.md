@@ -151,12 +151,16 @@ By making the interface async from the start:
 
 ---
 
-## Switching at the entry point (server.ts)
+## Switching at the entry point (server/index.ts)
 
-The composition root (`server.ts`) reads environment variables to decide which
-implementation to use:
+The server entry point reads environment variables and decides which DB
+implementation to create, then passes it to the composition root:
 
 ```ts
+// src/server/index.ts
+const logger  = makeConsoleLogger();
+const metrics = makeNoOpMetrics();
+
 const db = process.env.DYNAMODB_TABLE
   ? makeDynamoDb({
       tableName: process.env.DYNAMODB_TABLE,
@@ -164,24 +168,24 @@ const db = process.env.DYNAMODB_TABLE
       endpoint:  process.env.DYNAMODB_ENDPOINT,
       logger,
     })
-  : undefined; // falls back to makeInMemoryDb in compose.ts
+  : makeInMemoryDb({ logger });
 
-const { restaurant } = makeApp({ restaurantCfg: { tableSize }, logger, db });
+const { restaurant } = makeServerApp({ restaurantCfg: { tableSize }, logger, metrics, db });
 ```
 
-And in `compose.ts`, `makeInMemoryDb` is the default:
+`server/compose.ts` receives whatever db it is given — it has no defaults
+and no knowledge of environment variables:
 
 ```ts
-const makeApp = ({
-  restaurantCfg,
-  logger  = makeConsoleLogger(),
-  metrics = makeNoOpMetrics(),
-  db      = makeInMemoryDb({ logger }),  // ← default, used when db is undefined
-}: MakeAppCfg) => { ... };
+// src/server/compose.ts
+const makeServerApp = ({ restaurantCfg, logger, metrics, db }: ServerAppCfg) => {
+  const reserve    = makeReserve({ db, logger, metrics, restaurantCfg });
+  ...
+};
 ```
 
-This pattern — **default parameters as defaults, env vars as switches** — keeps the
-composition root readable and avoids if-else chains inside business logic.
+This keeps infrastructure decisions (env vars, which concrete type to use)
+at the entry point, and wiring logic in the composition root.
 
 ---
 
@@ -223,7 +227,7 @@ npm run server:dynamo
 
 This is equivalent to:
 ```bash
-DYNAMODB_TABLE=reservations DYNAMODB_ENDPOINT=http://localhost:4566 node src/server.ts
+DYNAMODB_TABLE=reservations DYNAMODB_ENDPOINT=http://localhost:4566 node src/server/index.ts
 ```
 
 ### 4. Test it
@@ -281,7 +285,7 @@ but are outside the scope of this learning project.
 | Interface     | `src/modules/restaurant/types.ts` | Defines what a DB must be able to do (domain port) |
 | In-memory impl | `makeInMemoryDb.ts`        | Fast, no deps — used in tests and by default |
 | DynamoDB impl | `makeDynamoDb.ts`           | Real AWS storage via DocumentClient       |
-| Wiring        | `src/compose.ts`            | Default = in-memory                       |
-| Wiring (prod) | `src/server.ts`             | Env var switches to DynamoDB              |
+| Wiring        | `src/server/compose.ts`     | Wires domain operations together          |
+| Entry point   | `src/server/index.ts`       | Reads env vars, creates db, calls compose |
 | Local infra   | `docker-compose.yml`        | LocalStack container                      |
 | Table setup   | `scripts/setup-local.sh`    | Creates the `reservations` table          |

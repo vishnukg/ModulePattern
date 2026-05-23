@@ -5,15 +5,15 @@
 Since Node.js 22, you can run `.ts` files directly with no extra tools:
 
 ```bash
-node src/server.ts
+node src/server/index.ts
 ```
 
 That is what this project does in both development and production.
 The same command, the same runtime, the same behaviour everywhere.
 
 ```bash
-npm run server   # node --watch src/server.ts  (dev — restarts on file changes)
-npm start        # node src/server.ts          (prod — identical, minus the watch)
+npm run server   # node --watch src/server/index.ts  (dev — restarts on file changes)
+npm start        # node src/server/index.ts          (prod — identical, minus the watch)
 ```
 
 This works because Node.js strips type annotations at startup (~45ms, once,
@@ -81,7 +81,7 @@ No configuration needed. Set a breakpoint in any `.ts` file and run the server
 with the built-in Node.js debugger:
 
 ```bash
-node --inspect src/server.ts
+node --inspect src/server/index.ts
 ```
 
 Or add a launch configuration to `.vscode/launch.json`:
@@ -94,7 +94,7 @@ Or add a launch configuration to `.vscode/launch.json`:
       "type": "node",
       "request": "launch",
       "name": "Debug server",
-      "program": "${workspaceFolder}/src/server.ts",
+      "program": "${workspaceFolder}/src/server/index.ts",
       "runtimeArgs": ["--watch"]
     }
   ]
@@ -151,11 +151,11 @@ bundle `node_modules` into the output. Everything else stays the same.
 
 | Script | Command | When to use |
 |---|---|---|
-| `npm run server` | `node --watch src/server.ts` | Daily development |
+| `npm run server` | `node --watch src/server/index.ts` | Daily development |
 | `npm run server:dynamo` | same + DynamoDB env vars | Dev against LocalStack |
-| `npm start` | `node src/server.ts` | Production server |
+| `npm start` | `node src/server/index.ts` | Production server |
 | `npm run start:dynamo` | same + DynamoDB env vars | Production with DynamoDB |
-| `npm run cli` | `node src/cli.ts` | Run the CLI |
+| `npm run cli` | `node src/cli/index.ts` | Run the CLI |
 | `npm run typecheck` | `tsc --noEmit` | Before every deploy, in CI |
 | `npm run build` | typecheck + tsup | Lambda / package distribution only |
 | `npm test` | vitest | Always |

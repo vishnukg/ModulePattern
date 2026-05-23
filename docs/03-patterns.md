@@ -63,19 +63,14 @@ explicitly in import paths — Node.js ESM does not auto-resolve directories.
 
 ---
 
-## 3. How `compose.ts` wires everything
+## 3. Composition roots — one per entry point
 
-`compose.ts` is the **composition root** — the single place that knows
-about all modules at once and wires them together.
+Each entry point has its own **composition root** (`compose.ts`) that wires
+domain operations together for that specific context.
 
 ```ts
-// src/compose.ts
-const makeApp = ({
-  restaurantCfg,
-  logger  = makeConsoleLogger(),
-  metrics = makeNoOpMetrics(),
-  db      = makeInMemoryDb({ logger }),
-}: MakeAppCfg) => {
+// src/server/compose.ts
+const makeServerApp = ({ restaurantCfg, logger, metrics, db }: ServerAppCfg) => {
   const reserve    = makeReserve({ db, logger, metrics, restaurantCfg });
   const cancel     = makeCancel({ db, logger, metrics });
   const update     = makeUpdate({ db, logger, metrics, restaurantCfg });
@@ -85,15 +80,31 @@ const makeApp = ({
 };
 ```
 
-Reading this:
-1. `logger` — defaults to `makeConsoleLogger()` unless an override is passed (tests pass `silentLogger`)
-2. `metrics` — defaults to `makeNoOpMetrics()` unless an override is passed
-3. `db` — defaults to `makeInMemoryDb` unless an override is passed (production passes `makeDynamoDb`)
-4. `reserve`, `cancel`, `update` — operations wired with all their dependencies
-5. `restaurant` — assembles operations into the public domain API
+```ts
+// src/cli/compose.ts
+const makeCliApp = ({ restaurantCfg, logger, metrics, db }: CliAppCfg) => {
+  const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
+  return { reserve };
+};
+```
 
-Default parameters handle the "production vs test" switching cleanly.
-No if-else chains, no environment checks inside business logic.
+Compose functions take all deps as **required parameters** — no defaults,
+no infrastructure decisions inside them. The entry point (`index.ts`) owns
+those decisions:
+
+```ts
+// src/server/index.ts  — infrastructure decisions live here
+const logger  = makeConsoleLogger();
+const metrics = makeNoOpMetrics();
+const db      = process.env.DYNAMODB_TABLE
+  ? makeDynamoDb({ tableName: process.env.DYNAMODB_TABLE, ... })
+  : makeInMemoryDb({ logger });
+
+const { restaurant } = makeServerApp({ restaurantCfg: { tableSize }, logger, metrics, db });
+```
+
+This keeps infrastructure decisions (which logger? which db?) at the outermost
+layer, and domain wiring (how do the operations connect?) in the compose file.
 
 ---
 
@@ -144,17 +155,17 @@ Each test creates exactly what it needs, nothing more.
 
 ## 5. Service lifetimes — when are services created?
 
-In `compose.ts` each `make*` call runs exactly once — every service is
-a **singleton within a single `makeApp()` call**. Two calls to `makeApp()`
-produce two fully independent sets of services with no shared state.
+In each compose function, every `make*` call runs exactly once — every
+service is a **singleton within a single compose call**. Two calls to
+`makeServerApp()` produce two fully independent sets of services.
 
-This is important for tests: each test that calls `makeApp()` (or wires
-modules directly) gets a fresh `db` with an empty store.
+This is important for tests: each test that wires modules directly gets
+a fresh `db` with an empty store.
 
 ```ts
-// Each call to makeApp gets a fresh in-memory store — tests never interfere
-const { restaurant: r1 } = makeApp({ restaurantCfg: { tableSize: 10 } });
-const { restaurant: r2 } = makeApp({ restaurantCfg: { tableSize: 10 } });
+// Each call creates a fresh in-memory store — tests never interfere
+const { restaurant: r1 } = makeServerApp({ restaurantCfg: { tableSize: 10 }, logger, metrics, db: makeInMemoryDb({ logger }) });
+const { restaurant: r2 } = makeServerApp({ restaurantCfg: { tableSize: 10 }, logger, metrics, db: makeInMemoryDb({ logger }) });
 // r1 and r2 are completely isolated
 ```
 

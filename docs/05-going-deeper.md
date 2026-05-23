@@ -76,7 +76,7 @@ In the functional pattern there is no `this`. Dependencies live in a closure.
 The function is a standalone value that carries everything it needs.
 
 ```ts
-// after compose.ts wires it up:
+// after server/compose.ts wires it up:
 const { reserve } = restaurant;
 
 await reserve({ quantity: 8, date: "2024-12-12" }); // ✓
@@ -169,12 +169,12 @@ Callers import by name — the internal file structure is hidden.
 
 #### Modules never import each other
 
-All dependencies flow through `compose.ts`. A module never imports another
-module directly.
+All dependencies flow through the composition roots. A module never imports
+another module directly.
 
 ```
-               compose.ts
-              /     |      \
+          server/compose.ts   cli/compose.ts
+              /     |      \         |
          modules/db  modules/logger  modules/restaurant
 ```
 
@@ -188,7 +188,7 @@ existing at all.
 2. Create `src/modules/email/sendConfirmation.ts` — one `make*` function
 3. Create `src/modules/email/index.ts` — barrel with named exports
 4. Update `ReserveCfg` in `restaurant/types.ts` if `reserve` needs email
-5. Wire it in `compose.ts`: `const sendConfirmation = makeSendConfirmation({ logger })`
+5. Wire it in the relevant compose files: `const sendConfirmation = makeSendConfirmation({ logger })`
 
 The pattern is identical every time. No new concepts needed.
 
@@ -262,6 +262,6 @@ For this case, **Immer** gives you structural sharing automatically —
 you write mutating code, Immer produces an immutable result using a
 proxy that only copies what changed.
 
-Neither case applies to this project. Wiring in `compose.ts` happens once
-at startup. At runtime, `reserve` returns a plain string — nothing is
+Neither case applies to this project. Wiring in the compose files happens
+once at startup. At runtime, `reserve` returns a plain string — nothing is
 spread at all.

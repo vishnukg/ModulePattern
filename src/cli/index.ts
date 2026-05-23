@@ -1,5 +1,8 @@
-import { parseArgs } from "node:util";
-import makeApp from "./compose.ts";
+import { parseArgs }            from "node:util";
+import makeCliApp               from "./compose.ts";
+import { makeConsoleLogger }    from "../modules/logger/index.ts";
+import { makeNoOpMetrics }      from "../modules/metrics/index.ts";
+import { makeInMemoryDb }       from "../modules/db/index.ts";
 
 const { values } = parseArgs({
   options: {
@@ -18,7 +21,11 @@ if (!values.quantity || isNaN(quantity)) {
   process.exit(1);
 }
 
-const { restaurant } = makeApp({ restaurantCfg: { tableSize: seats } });
-const result = await restaurant.reserve({ quantity, date });
+const logger  = makeConsoleLogger();
+const metrics = makeNoOpMetrics();
+const db      = makeInMemoryDb({ logger });
+
+const { reserve } = makeCliApp({ restaurantCfg: { tableSize: seats }, logger, metrics, db });
+const result = await reserve({ quantity, date });
 
 console.log(`Reservation ${result} — ${quantity} seat(s) on ${date} (table size: ${seats})`);

@@ -146,17 +146,17 @@ concerns are woven in via the deps object.
 
 ## 5. Wiring in compose
 
-`logger`, `metrics`, and `db` are wired first because every subsequent
-operation depends on them. Default parameters handle the switching:
+Each entry point creates its own infrastructure and passes it to its
+composition root. The composition root wires everything together:
 
 ```ts
-// src/compose.ts
-const makeApp = ({
-  restaurantCfg,
-  logger  = makeConsoleLogger(),   // production default
-  metrics = makeNoOpMetrics(),     // production default (no-op, not fake)
-  db      = makeInMemoryDb({ logger }),
-}: MakeAppCfg) => {
+// src/server/index.ts — creates infrastructure
+const logger  = makeConsoleLogger();
+const metrics = makeNoOpMetrics();
+const db      = makeInMemoryDb({ logger }); // or makeDynamoDb
+
+// src/server/compose.ts — pure wiring, no defaults
+const makeServerApp = ({ restaurantCfg, logger, metrics, db }: ServerAppCfg) => {
   const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
   const cancel  = makeCancel({ db, logger, metrics });
   const update  = makeUpdate({ db, logger, metrics, restaurantCfg });
@@ -164,15 +164,12 @@ const makeApp = ({
 };
 ```
 
-`logger ?? makeConsoleLogger()`: if the caller passes a logger (tests do),
-use it; otherwise default to console logger (production).
-
-To swap the console logger for Pino or Winston, change one line here.
-No module file needs to change.
+To swap the console logger for Pino or Winston, change one line in
+`server/index.ts`. No module file needs to change.
 
 Note: production uses `makeNoOpMetrics` (discards all metrics). To wire up
-a real metrics sink (StatsD, DataDog), implement `Metrics` and pass it to
-`makeApp` from `server.ts` — nothing else changes.
+a real metrics sink (StatsD, DataDog), implement `Metrics` and pass it from
+`server/index.ts` — nothing else changes.
 
 ---
 

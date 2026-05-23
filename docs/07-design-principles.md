@@ -63,7 +63,7 @@ If you import `makeInMemoryDb` directly inside `reserve.ts`, the business logic
 is now coupled to the storage choice. Swapping to DynamoDB means editing the
 business logic file — and that change has nothing to do with business logic.
 
-With DIP, swapping storage is done entirely in `compose.ts`, one line.
+With DIP, swapping storage is done entirely in `server/index.ts`, one line.
 The business logic is not touched.
 
 **How to apply it:**
@@ -135,7 +135,8 @@ Infrastructure imports from the domain.
 logger/types.ts     ←── restaurant/types.ts  ←── db/makeInMemoryDb.ts
 metrics/types.ts    ←──      (domain)         ←── db/makeDynamoDb.ts
                                               ←── http/makeRestaurantRouter.ts
-                                              ←── compose.ts
+                                              ←── server/compose.ts
+                                              ←── cli/compose.ts
 ```
 
 `restaurant/types.ts` imports `Logger` and `Metrics` (abstract interfaces).
@@ -177,9 +178,10 @@ A module that contains business logic should not know about DynamoDB.
 | `http/`           | HTTP transport (parse request, send response) |
 | `logger/`         | Structured log output                  |
 | `metrics/`        | Timing and counter instrumentation     |
-| `compose.ts`      | Wiring everything together             |
-| `server.ts`       | HTTP server startup                    |
-| `cli.ts`          | CLI entry point                        |
+| `server/compose.ts` | Wiring domain ops for the HTTP server  |
+| `server/index.ts`   | HTTP server startup, infrastructure    |
+| `cli/compose.ts`    | Wiring domain ops for the CLI          |
+| `cli/index.ts`      | CLI entry point, infrastructure        |
 
 `makeRestaurantRouter.ts` handles HTTP concerns — it reads `req.body`,
 validates the raw input, maps outcomes to status codes (201/422/400).
@@ -247,33 +249,34 @@ cross-cutting dependencies (logger, db, metrics).
 
 **Where it lives in this codebase:**
 
-`src/compose.ts` is the composition root for application logic:
+Each entry point has its own composition root. `src/server/compose.ts` wires
+the domain operations for the HTTP server; `src/cli/compose.ts` wires what
+the CLI needs. Both take all deps as required parameters — no defaults, no
+infrastructure decisions inside them:
 
 ```ts
-const makeApp = ({
-  restaurantCfg,
-  logger  = makeConsoleLogger(),   // ← default wiring
-  metrics = makeNoOpMetrics(),
-  db      = makeInMemoryDb({ logger }),
-}: MakeAppCfg) => {
+// src/server/compose.ts
+const makeServerApp = ({ restaurantCfg, logger, metrics, db }: ServerAppCfg) => {
   const reserve    = makeReserve({ db, logger, metrics, restaurantCfg });
-  const restaurant = makeRestaurant({ reserve, getReservations: db.getReservations });
+  const cancel     = makeCancel({ db, logger, metrics });
+  const update     = makeUpdate({ db, logger, metrics, restaurantCfg });
+  const restaurant = makeRestaurant({ reserve, cancel, update, getReservations: db.getReservations });
   return { restaurant };
 };
 ```
 
-`src/server.ts` is the entry point for the HTTP server. It calls `makeApp` with
-production overrides (DynamoDB when the env var is set):
+Infrastructure decisions (which logger? which db?) live in the entry points:
 
 ```ts
-const db = process.env.DYNAMODB_TABLE
+// src/server/index.ts
+const logger = makeConsoleLogger();
+const db     = process.env.DYNAMODB_TABLE
   ? makeDynamoDb({ tableName: process.env.DYNAMODB_TABLE, ... })
-  : undefined;
+  : makeInMemoryDb({ logger });
 
-const { restaurant } = makeApp({ restaurantCfg: { tableSize }, logger, db });
+const { restaurant } = makeServerApp({ restaurantCfg: { tableSize }, logger, metrics, db });
 ```
 
-Every factory call that matters for the whole application happens in these two files.
 `reserve.ts` never calls `makeConsoleLogger()` — it receives a logger.
 
 **Why it matters:**
@@ -476,10 +479,9 @@ Don't create a separate types file for types that are only used in one place.
 
 **Where it lives in this codebase:**
 
-`MakeAppCfg` is defined at the top of `compose.ts`. It's only used there.
-It used to live in a separate `src/modules/types.ts` file — that file existed
-solely for one type. Moving it into `compose.ts` removed one file and made
-the code easier to navigate (the type is right next to the function that uses it).
+`ServerAppCfg` is defined at the top of `server/compose.ts`. It's only used there.
+`CliAppCfg` is defined at the top of `cli/compose.ts`. It's only used there.
+Each type lives right next to the function that uses it — no extra file needed.
 
 `Reservation`, `RestaurantCfg`, `DB`, `Restaurant` are all in `restaurant/types.ts`
 because they are all restaurant domain concepts. They're used across multiple files,

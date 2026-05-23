@@ -24,7 +24,7 @@ Start here, then read the files in order.
 | Dependency Inversion Principle | `DB` interface in `restaurant/types.ts`, implemented in `db/` |
 | Ports and adapters | `DB`, `Logger`, `Metrics` are ports; `makeDynamoDb` etc. are adapters |
 | Inward dependency rule | `db/` depends on `restaurant/` — never the other way |
-| Composition root | `src/compose.ts` — all wiring in one place |
+| Composition roots | `src/server/compose.ts`, `src/cli/compose.ts` — one per entry point |
 | Functional DI | `makeReserve({ db, logger, metrics })` — deps as parameters |
 | Stubs vs mocks | Stubs: plain objects; mocks: `vi.fn()` only when asserting on calls |
 | AAA test pattern | Every test — Arrange / Act / Assert, no shared `beforeEach` state |
@@ -32,4 +32,4 @@ Start here, then read the files in order.
 | Async at the boundary | `DB` interface is always async even for in-memory |
 | Test infrastructure | `tests/helpers/` — not in `src/` |
 | Source maps | `tsup.config.ts` `sourcemap: true` + `node --enable-source-maps` |
-| Module resolution | `moduleResolution: "bundler"` — correct for `tsx` and `tsup` |
+| Module resolution | `moduleResolution: "nodenext"` — correct for native Node.js ESM |

@@ -1,7 +1,8 @@
 # 08 — TypeScript Module Resolution
 
-This project uses `"moduleResolution": "bundler"`. This doc explains what that
-means, why it was chosen, what the alternatives are, and when each one is correct.
+This project uses `"module": "NodeNext"` (which implies `"moduleResolution": "nodenext"`).
+This doc explains what that means, why it was chosen, what the alternatives are,
+and when each one is correct.
 
 ---
 
@@ -73,46 +74,32 @@ Avoid for new projects — it misses many modern TypeScript checks.
 
 ---
 
-## Why this project uses `"bundler"`
+## Why this project uses `"nodenext"`
 
-This project is run with `tsx`:
+This project runs TypeScript files directly with native Node.js (Node.js 22+):
 
 ```bash
-tsx src/server.ts
-tsx src/cli.ts
+node src/server/index.ts
+node src/cli/index.ts
 ```
 
-`tsx` is a TypeScript execution tool built on esbuild. It handles module
-resolution itself — it is not Node.js native ESM. Using `"nodenext"` would
-enforce rules that `tsx` doesn't require and would give misleading errors
-(or require workarounds like `allowImportingTsExtensions`).
+Node.js native ESM has strict module resolution rules — no directory imports,
+extensions required. `"nodenext"` makes TypeScript enforce exactly those rules,
+so imports that pass `tsc --noEmit` are guaranteed to work at runtime too.
 
-`"bundler"` is the setting the TypeScript team recommends for exactly this
-scenario: TypeScript projects that use a bundler or bundler-like tool rather
-than shipping raw `.js` files to Node.js.
+One extra flag required: `"allowImportingTsExtensions": true`.
+Since we run `.ts` files directly (no compilation step), import paths use `.ts`
+extensions (e.g. `from "../restaurant/types.ts"`). Without this flag,
+`tsc --noEmit` rejects them because normally TypeScript emits `.js` files and
+`.ts` import extensions would be wrong in the output. With `"noEmit": true`
+there is no output, so the flag is safe to enable.
 
-One flag that stays required even in `bundler` mode: `"allowImportingTsExtensions": true`.
-This project's imports still use explicit `.ts` extensions
-(e.g. `from "../restaurant/types.ts"`). Without this flag, `tsc --noEmit`
-rejects them. The flag tells TypeScript: "I know these files end in `.ts` —
-the bundler handles the resolution, not Node directly."
+All imports in this project therefore look like:
 
----
-
-## What `"module": "Preserve"` means
-
-`module` controls how TypeScript emits import/export syntax in compiled output.
-Since this project uses `"noEmit": true` (TypeScript only type-checks; tsx does
-the actual execution), the `module` setting has almost no practical effect here.
-
-`"Preserve"` means: emit the import syntax exactly as written — don't transform
-`import` to `require()` or vice versa. It's the right default when a bundler
-or tool handles the output.
-
-The previous setting was `"NodeNext"`, which implied `moduleResolution: "nodenext"`
-and required explicit `.ts` extensions everywhere. Changing to
-`"module": "Preserve"` + `"moduleResolution": "bundler"` correctly reflects the
-actual runtime.
+```ts
+import { makeReserve } from "../modules/restaurant/index.ts";  // ✓
+import { makeReserve } from "../modules/restaurant";           // ✗ — directory import forbidden
+```
 
 ---
 
@@ -126,11 +113,11 @@ actual runtime.
 
 **Is it advised?**
 
-Yes — for a project running with `tsx`, `"bundler"` is the *correct* setting, not
-a shortcut. Using `"nodenext"` with `tsx` was technically incorrect: it was
-enforcing Node.js native ESM rules on a tool that doesn't follow them. The switch
-to `"bundler"` makes the TypeScript configuration accurately describe how the
-project actually runs.
+Yes — for a project running with native Node.js, `"nodenext"` is the *correct*
+setting. It makes the TypeScript configuration accurately describe how the
+project actually runs. If you later switch to `tsx` or Vite, the right move is
+to switch to `"bundler"` — not `"nodenext"` — because those tools handle
+resolution themselves and don't follow Node's strict rules.
 
 If this project were ever refactored to run as native Node.js ESM without tsx
 (e.g. compiling to `.js` with `tsc` and running `node server.js`), the correct

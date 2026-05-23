@@ -2,8 +2,8 @@ import { defineConfig } from "tsup";
 
 export default defineConfig({
   entry: {
-    server: "src/server.ts",
-    cli:    "src/cli.ts",
+    server: "src/server/index.ts",
+    cli:    "src/cli/index.ts",
   },
   format:    ["esm"],
   sourcemap: true,   // generates .map files so stack traces show original TS lines
