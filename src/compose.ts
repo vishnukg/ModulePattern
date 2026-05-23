@@ -1,21 +1,13 @@
 import modules from "./modules/index.ts";
+import { container } from "./container.ts";
 import type { ComposeCfg } from "./modules/types.ts";
 
-export default ({ restaurantCfg }: ComposeCfg) => {
-  // the pattern is you first call the outerfunction with dependencies
-  // so it returns the inner function which can be used
-  // we then wrap the innner function in a object which is then added to the compose object
-  // compose object is returned
-  const saveReservation = modules.db.saveReservation();
-  const db = { saveReservation };
-  // Even though db is an object of its own,
-  // we still wrap db in an object and pass it to reserve,
-  // because reserve can have multiple dependencies and db is
-  // just one of them
-  const reserve = modules.restaurant.reserve({
-    db,
-    restaurantCfg,
-  });
-  const restaurant = { reserve };
-  return { restaurant };
-};
+export default ({ restaurantCfg, logger: loggerOverride, metrics: metricsOverride }: ComposeCfg) =>
+  container()
+    .add("logger",          () => loggerOverride  ?? modules.logger.consoleLogger())
+    .add("metrics",         () => metricsOverride ?? modules.metrics.fakeMetrics())
+    .add("saveReservation", ({ logger }) => modules.db.saveReservation({ logger }))
+    .add("db",              ({ saveReservation }) => ({ saveReservation }))
+    .add("reserve",         ({ db, logger, metrics }) => modules.restaurant.reserve({ db, logger, metrics, restaurantCfg }))
+    .add("restaurant",      ({ reserve }) => ({ reserve }))
+    .build();
