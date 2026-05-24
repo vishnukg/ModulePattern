@@ -45,13 +45,15 @@ const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
 };
 ```
 
-`ReserveCfg` requires `db: DB`, where `DB` is:
+`ReserveCfg` requires `db: DB`, where `DB` is defined in `restaurant/types.ts`:
 
 ```ts
-export type DB = {
-  saveReservation: (reservation: Reservation) => Promise<void>;
-  getReservations: () => Promise<Reservation[]>;
-};
+export interface DB {
+  saveReservation:   (input: ReservationInput) => Promise<Reservation>;
+  getReservations:   () => Promise<Reservation[]>;
+  cancelReservation: (id: string) => Promise<boolean>;
+  updateReservation: (id: string, input: ReservationInput) => Promise<Reservation | null>;
+}
 ```
 
 `makeInMemoryDb` and `makeDynamoDb` are low-level — they deal with storage details.
@@ -76,50 +78,77 @@ The business rule file should only change when business rules change.
 
 ## 2. Ports and Adapters (Hexagonal Architecture)
 
-**Rule:** Define what your domain *needs* as an interface (port).
-Write implementations of that interface separately (adapters).
-The domain owns the port definition; adapters depend on the domain.
+Hexagonal architecture (also called "ports and adapters") is a way of organising
+code so that your business logic is completely isolated from infrastructure concerns
+like databases, HTTP, and logging.
+
+The idea: imagine the domain at the centre of a hexagon. Each edge of the hexagon
+is a **port** — a formally defined interface. The outside world connects to those
+ports through **adapters** — concrete implementations that translate between the
+real world and the interface the domain expects.
+
+**Two kinds of ports:**
+
+- **Driving ports** — the outside world calls *into* the domain through these.
+  They describe what callers can do with the domain.
+  In this codebase: the `Restaurant` interface.
+
+- **Driven ports** — the domain calls *out* through these. They describe what
+  the domain needs from infrastructure.
+  In this codebase: `DB`, `Logger`, `Metrics`.
+
+```
+  Driving adapters                Domain                  Driven adapters
+  (call the domain)               (pure business logic)   (serve the domain)
+
+  makeRestaurantRouter ──┐                            ┌── makeInMemoryDb
+                         │   ┌───────────────────┐    │
+  cli/index.ts ──────────┼──→│  reserve          │────┼── makeDynamoDb
+                         │   │  cancel           │    │
+                         │   │  update           │    ├── makeConsoleLogger
+                         └──→│  getReservations  │    │
+                             └───────────────────┘    └── makeNoOpMetrics
+
+             calls via                        calls via
+          Restaurant port                  DB / Logger / Metrics ports
+           (driving port)                     (driven ports)
+           defined in                         defined in
+           restaurant/types.ts                restaurant/types.ts
+```
+
+The domain defines *all* ports. Adapters depend on the domain; the domain
+depends on nothing outside itself.
 
 **Where it lives in this codebase:**
 
-```
-Domain (restaurant/)
-  ├── types.ts           ← defines DB (the port)
-  ├── reserve.ts         ← uses the port
-  └── makeRestaurant.ts  ← assembles the domain object
+| Port          | Kind    | Defined in              | Adapters that satisfy it                    |
+|---------------|---------|-------------------------|---------------------------------------------|
+| `DB`          | Driven  | `restaurant/types.ts`   | `makeInMemoryDb`, `makeDynamoDb`            |
+| `Logger`      | Driven  | `logger/types.ts`       | `makeConsoleLogger`                         |
+| `Metrics`     | Driven  | `metrics/types.ts`      | `makeNoOpMetrics`                           |
+| `Restaurant`  | Driving | `restaurant/types.ts`   | `makeRestaurantRouter`, `cli/index.ts`      |
 
-Adapters (db/)
-  ├── makeInMemoryDb.ts  ← implements the port (in-memory)
-  └── makeDynamoDb.ts    ← implements the port (AWS DynamoDB)
-```
-
-The `DB` interface is defined inside `restaurant/types.ts` — the domain module —
-not inside `db/types.ts`. This is intentional. The domain asks the question:
-
-> "What do I need a data store to be able to do?"
-
-The adapters answer that question by satisfying the interface. They depend on the
-domain; the domain does not depend on them.
-
-The same pattern applies to `Logger` and `Metrics`. The restaurant domain uses them;
-`consoleLogger.ts`, `makeNoOpMetrics.ts` are the adapters that implement them.
+`DB` is defined inside `restaurant/types.ts` — the domain module — not inside
+`db/types.ts`. This is intentional: the domain asks "what do I need a data store
+to be able to do?" and the adapters answer by satisfying the interface. They
+depend on the domain; the domain does not depend on them.
 
 **Why it matters:**
 
-Without this pattern, your business logic becomes entangled with infrastructure.
+Without this pattern, business logic becomes entangled with infrastructure.
 Testing requires a real database. Changing from DynamoDB to PostgreSQL touches
-business logic files. The codebase becomes hard to reason about because concerns
-are mixed.
+business logic files.
 
-With ports and adapters, the domain is a pure island. You can read it and understand
-the business rules without knowing anything about AWS, Express, or console.log.
+With ports and adapters, the domain is a pure island. You can read `reserve.ts`,
+`makeCancel.ts`, and `makeUpdate.ts` and understand all the business rules without
+knowing anything about AWS, Express, or `console.log`.
 
 **How to apply it:**
 
 When you find yourself writing `import { DynamoDBClient } from "@aws-sdk/..."` 
-inside a business logic file, stop. Define an interface for what you need,
-put the AWS code in a separate adapter file, and inject the adapter at the
-composition root.
+inside a business logic file, stop. Define an interface for what you need
+(the port), put the AWS code in a separate file (the adapter), and inject the
+adapter at the composition root.
 
 ---
 
@@ -358,8 +387,10 @@ In tests, stubs satisfy the same interface:
 ```ts
 // tests/reserve.test.ts
 const stubDb: DB = {
-  saveReservation: async () => {},
-  getReservations: async () => [],
+  saveReservation:   async (input) => ({ id: "stub-id", ...input }),
+  getReservations:   async () => [],
+  cancelReservation: async () => false,
+  updateReservation: async () => null,
 };
 ```
 
@@ -403,12 +434,14 @@ export interface Metrics {
 }
 ```
 
-`DB` has exactly two:
+`DB` has exactly four — one for each operation the domain needs:
 ```ts
-export type DB = {
-  saveReservation: (reservation: Reservation) => Promise<void>;
-  getReservations: () => Promise<Reservation[]>;
-};
+export interface DB {
+  saveReservation:   (input: ReservationInput) => Promise<Reservation>;
+  getReservations:   () => Promise<Reservation[]>;
+  cancelReservation: (id: string) => Promise<boolean>;
+  updateReservation: (id: string, input: ReservationInput) => Promise<Reservation | null>;
+}
 ```
 
 None of these interfaces have methods that only some callers would use.
@@ -440,18 +473,20 @@ make it async from the start — even when the current implementation is synchro
 
 `makeInMemoryDb` does no real I/O. It could be synchronous:
 ```ts
-saveReservation: (r: Reservation) => void          // sync, simpler
+saveReservation: (input: ReservationInput) => Reservation     // sync, simpler
 ```
 
 But the `DB` interface is defined as async:
 ```ts
-saveReservation: (reservation: Reservation) => Promise<void>  // async
+saveReservation: (input: ReservationInput) => Promise<Reservation>   // async
 ```
 
 And the in-memory implementation matches:
 ```ts
-const saveReservation = async (reservation: Reservation): Promise<void> => {
-  reservations.push(reservation);
+const saveReservation = async (input: ReservationInput): Promise<Reservation> => {
+  const reservation = { id: generateId(), ...input };
+  store.push(reservation);
+  return reservation;
 };
 ```
 
@@ -487,8 +522,9 @@ Each type lives right next to the function that uses it — no extra file needed
 because they are all restaurant domain concepts. They're used across multiple files,
 so a shared types file within the module is appropriate.
 
-`InMemoryDbCfg` and `DynamoDbCfg` live in `db/types.ts` because they're
-specific to the db module's infrastructure implementations.
+`InMemoryDbCfg` is defined at the top of `makeInMemoryDb.ts` — one file uses it,
+so it lives there. Same for `DynamoDbCfg` in `makeDynamoDb.ts` and `ServerAppCfg`
+in `server/compose.ts`. There is no `db/types.ts` — there was no second consumer.
 
 **Why it matters:**
 
@@ -547,11 +583,16 @@ about whether and how the function was called.
 
 **Where it lives in this codebase:**
 
-Stubs in `reserve.test.ts` — these are shared across many tests that don't
-care about the interaction:
+Stubs in `reserve.test.ts` — these satisfy the interface and get out of the way:
 
 ```ts
-const stubDb: DB           = { saveReservation: async () => {}, getReservations: async () => [] };
+const noOp = async () => { throw new Error("not implemented"); };
+const stubDb: DB = {
+  saveReservation:   async (input) => ({ id: "stub-id", ...input }),
+  getReservations:   async () => [],
+  cancelReservation: async () => false,
+  updateReservation: async () => null,
+};
 const stubLogger: Logger   = { info: () => {}, warn: () => {}, error: () => {} };
 const stubMetrics: Metrics = { increment: () => {}, timing: () => {} };
 ```
@@ -559,9 +600,14 @@ const stubMetrics: Metrics = { increment: () => {}, timing: () => {} };
 Mocks in the same file — used only for the test that asserts on the interaction:
 
 ```ts
-it("calls db.saveReservation with the reservation on acceptance", async () => {
-  const mockDb: DB = { saveReservation: vi.fn(async () => {}), getReservations: async () => [] };
-  //                                    ↑ vi.fn() because we assert on it below
+it("calls db.saveReservation with the reservation input on acceptance", async () => {
+  const mockDb: DB = {
+    saveReservation:   vi.fn(async (input) => ({ id: "x", ...input })),
+    //                 ↑ vi.fn() because we assert on it below
+    getReservations:   async () => [],
+    cancelReservation: async () => false,
+    updateReservation: async () => null,
+  };
   ...
   expect(mockDb.saveReservation).toHaveBeenCalledWith({ quantity: 8, date: "12/12/12" });
 });
