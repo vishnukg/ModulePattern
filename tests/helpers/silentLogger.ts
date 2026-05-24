@@ -1,4 +1,4 @@
-import type { Logger } from "../../src/modules/shared/index.ts";
+import type { Logger } from "../../src/ports/index.ts";
 
 const makeSilentLogger = (): Logger => ({
   info: () => {},

@@ -1,8 +1,9 @@
-import { parseArgs }            from "node:util";
-import { randomUUID }           from "node:crypto";
-import makeCliApp               from "./compose.ts";
-import { makeConsoleLogger, makeNoOpMetrics } from "../modules/shared/index.ts";
-import { makeInMemoryDb }       from "../modules/db/index.ts";
+import { parseArgs }     from "node:util";
+import { randomUUID }    from "node:crypto";
+import makeCliApp        from "./compose.ts";
+import makeConsoleLogger from "../adapters/logger/consoleLogger.ts";
+import makeNoOpMetrics   from "../adapters/metrics/makeNoOpMetrics.ts";
+import makeInMemoryDb    from "../adapters/db/makeInMemoryDb.ts";
 
 const { values } = parseArgs({
   options: {

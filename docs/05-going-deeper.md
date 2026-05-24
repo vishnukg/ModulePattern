@@ -96,34 +96,34 @@ closure — they travel with the function wherever it goes.
 
 #### One `make*` function per file
 
-Each file in `src/modules/` exports a single default `make*` function.
+Each file exports a single default `make*` function.
 The filename is the function name (minus the `make` prefix for ops,
 full name for factories).
 
 ```
-src/modules/restaurant/
+src/domain/restaurant/
   reserve.ts        ← makeReserve
   makeCancel.ts     ← makeCancel
   makeUpdate.ts     ← makeUpdate
   makeRestaurant.ts ← makeRestaurant
-  types.ts          ← Reservation, DB, RestaurantCfg, ...
+  types.ts          ← Reservation, DB, Restaurant, RestaurantCfg, ...
   index.ts          ← barrel (named re-exports)
 
-src/modules/db/
-  makeInMemoryDb.ts
-  makeDynamoDb.ts
-  index.ts
+src/ports/
+  logger.ts         ← Logger interface
+  metrics.ts        ← Metrics, FakeMetrics interfaces
+  index.ts          ← barrel (type-only re-exports)
 
-src/modules/shared/           ← cross-cutting: used by domain and adapters alike
+src/adapters/
+  db/
+    makeInMemoryDb.ts
+    makeDynamoDb.ts
   logger/
     consoleLogger.ts
-    types.ts          ← Logger interface
-    index.ts
   metrics/
     makeNoOpMetrics.ts
-    types.ts          ← Metrics, FakeMetrics interfaces
-    index.ts
-  index.ts            ← barrel for all shared exports
+  http/
+    makeRestaurantRouter.ts
 ```
 
 If you want to find `makeCancel`, open `makeCancel.ts`. Never any ambiguity.
@@ -141,18 +141,18 @@ tests/helpers/
 Types live in a `types.ts` file next to the code that owns them.
 
 ```
-src/modules/restaurant/types.ts      ← Reservation, DB, and all restaurant types
-src/modules/shared/logger/types.ts   ← Logger interface
-src/modules/shared/metrics/types.ts  ← Metrics, FakeMetrics interfaces
+src/domain/restaurant/types.ts   ← Reservation, DB, Restaurant, and all domain types
+src/ports/logger.ts              ← Logger interface
+src/ports/metrics.ts             ← Metrics, FakeMetrics interfaces
 ```
 
-`restaurant/types.ts` owns the `DB` interface because the domain defines
+`domain/restaurant/types.ts` owns the `DB` interface because the domain defines
 what a database *must* be able to do — it's a port the domain controls.
-Infrastructure (`db/`) imports from `restaurant/types.ts` to satisfy it.
+Adapters (`adapters/db/`) import from `domain/restaurant/types.ts` to satisfy it.
 
-`Logger` and `Metrics` live in `shared/` rather than in `restaurant/types.ts`
-because they are used by adapters too (e.g. `makeInMemoryDb` logs). They are
-cross-cutting: neither domain-specific nor infrastructure-specific.
+`Logger` and `Metrics` live in `ports/` rather than in `domain/restaurant/types.ts`
+because they are cross-cutting — used by the domain and by adapters alike
+(e.g. `makeInMemoryDb` logs). They are not restaurant-specific concepts.
 
 Single-use cfg types (`InMemoryDbCfg`, `DynamoDbCfg`, `ServerAppCfg`) are
 defined inline at the top of the file that uses them — no separate types file
@@ -164,38 +164,42 @@ Each `index.ts` uses named re-exports to expose only what the module wants
 to share:
 
 ```ts
-// src/modules/restaurant/index.ts
+// src/domain/restaurant/index.ts
 export { default as makeReserve }    from "./reserve.ts";
 export { default as makeCancel }     from "./makeCancel.ts";
 export { default as makeUpdate }     from "./makeUpdate.ts";
 export { default as makeRestaurant } from "./makeRestaurant.ts";
 export type { Reservation, DB, ... } from "./types.ts";
+
+// src/ports/index.ts  — type-only; implementations live in adapters/
+export type { Logger }               from "./logger.ts";
+export type { Metrics, FakeMetrics } from "./metrics.ts";
 ```
 
 Callers import by name — the internal file structure is hidden.
 
-#### Modules never import each other
+#### Layers never import across boundaries
 
-All dependencies flow through the composition roots. A module never imports
-another module directly.
+All dependencies flow through the composition roots. Domain code never imports adapters.
 
 ```
           server/compose.ts   cli/compose.ts
               /     |      \         |
-         modules/db  modules/shared  modules/restaurant
+         adapters/  ports/   domain/restaurant
 ```
 
 `reserve.ts` does not import `makeInMemoryDb`. It receives `db` as an
 argument. This means you can test `reserve` without any DB implementation
 existing at all.
 
-#### Adding a new module — the exact steps
+#### Adding a new operation — the exact steps
 
-1. Create `src/modules/email/types.ts` — types owned by this module
-2. Create `src/modules/email/sendConfirmation.ts` — one `make*` function
-3. Create `src/modules/email/index.ts` — barrel with named exports
-4. Update `ReserveCfg` in `restaurant/types.ts` if `reserve` needs email
-5. Wire it in the relevant compose files: `const sendConfirmation = makeSendConfirmation({ logger })`
+Example: adding email confirmation when a reservation is accepted.
+
+1. Add an `Email` port interface to `src/ports/email.ts`
+2. Create `src/adapters/email/makeNodemailerEmail.ts` — one `make*` function implementing the port
+3. Update `ReserveCfg` in `domain/restaurant/types.ts` if `reserve` needs it
+4. Wire it in the relevant compose files: `const email = makeNodemailerEmail({ ... })`
 
 The pattern is identical every time. No new concepts needed.
 

@@ -1,4 +1,4 @@
-import type { Logger } from "./types.ts";
+import type { Logger } from "../../ports/logger.ts";
 
 const makeConsoleLogger = (): Logger => ({
   info: (message, data) =>

@@ -11,12 +11,12 @@ and when each one is correct.
 When TypeScript sees this import:
 
 ```ts
-import { makeReserve } from "./modules/restaurant";
+import { makeReserve } from "./domain/restaurant";
 ```
 
 It needs to figure out which file that refers to. Is it:
-- `./modules/restaurant.ts`?
-- `./modules/restaurant/index.ts`?
+- `./domain/restaurant.ts`?
+- `./domain/restaurant/index.ts`?
 - Something else?
 
 The answer depends on which **module resolution strategy** is configured.
@@ -33,13 +33,13 @@ Every import must specify the exact path the runtime will find.
 
 ```ts
 // ✓ — explicit path, explicit extension
-import { makeReserve } from "./modules/restaurant/index.ts";
+import { makeReserve } from "./domain/restaurant/index.ts";
 
 // ✗ — TypeScript error: directory imports not allowed
-import { makeReserve } from "./modules/restaurant";
+import { makeReserve } from "./domain/restaurant";
 
 // ✗ — TypeScript error: extension required
-import { makeReserve } from "./modules/restaurant/index";
+import { makeReserve } from "./domain/restaurant/index";
 ```
 
 Use this when: your code runs directly in Node.js as native ESM
@@ -53,13 +53,13 @@ themselves at build or run time.
 
 ```ts
 // ✓ — directory import resolves to index.ts
-import { makeReserve } from "./modules/restaurant";
+import { makeReserve } from "./domain/restaurant";
 
 // ✓ — explicit path still works
-import { makeReserve } from "./modules/restaurant/index.ts";
+import { makeReserve } from "./domain/restaurant/index.ts";
 
 // ✓ — extension optional
-import { makeReserve } from "./modules/restaurant/reserve";
+import { makeReserve } from "./domain/restaurant/reserve";
 ```
 
 Use this when: you use `tsx`, `ts-node`, Vite, esbuild, or any bundler to
@@ -97,8 +97,8 @@ there is no output, so the flag is safe to enable.
 All imports in this project therefore look like:
 
 ```ts
-import { makeReserve } from "../modules/restaurant/index.ts";  // ✓
-import { makeReserve } from "../modules/restaurant";           // ✗ — directory import forbidden
+import { makeReserve } from "../domain/restaurant/index.ts";  // ✓
+import { makeReserve } from "../domain/restaurant";           // ✗ — directory import forbidden
 ```
 
 ---

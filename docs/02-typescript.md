@@ -74,7 +74,7 @@ In this project generics appear in the `DB` interface — `Promise<T>` means
 "an async operation that resolves to `T`":
 
 ```ts
-// src/modules/restaurant/types.ts
+// src/domain/restaurant/types.ts
 export type DB = {
   saveReservation:   (input: ReservationInput) => Promise<Reservation>;
   getReservations:   () => Promise<Reservation[]>;

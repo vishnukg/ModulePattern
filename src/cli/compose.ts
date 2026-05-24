@@ -1,6 +1,6 @@
-import { makeReserve }                from "../modules/restaurant/index.ts";
-import type { RestaurantCfg, DB }    from "../modules/restaurant/index.ts";
-import type { Logger, Metrics }      from "../modules/shared/index.ts";
+import { makeReserve }                from "../domain/restaurant/index.ts";
+import type { RestaurantCfg, DB }    from "../domain/restaurant/index.ts";
+import type { Logger, Metrics }      from "../ports/index.ts";
 
 type CliAppCfg = {
   restaurantCfg: RestaurantCfg;

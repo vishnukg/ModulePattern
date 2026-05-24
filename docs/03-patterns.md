@@ -16,7 +16,7 @@ The `make*` function is called once during wiring (in `compose.ts`).
 The returned operation is what's called at runtime — once per request.
 
 ```ts
-// src/modules/restaurant/reserve.ts
+// src/domain/restaurant/reserve.ts
 const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
   const reserve = async ({ quantity, date }: ReservationInput): Promise<"Accepted" | "Rejected"> => {
     if (quantity <= restaurantCfg.tableSize) {
@@ -40,7 +40,7 @@ As a module grows beyond one file, a barrel (`index.ts`) controls what
 the outside world can see. Internal implementation files stay private.
 
 ```ts
-// src/modules/restaurant/index.ts
+// src/domain/restaurant/index.ts
 export { default as makeReserve }    from "./reserve.ts";
 export { default as makeCancel }     from "./makeCancel.ts";
 export { default as makeUpdate }     from "./makeUpdate.ts";
@@ -51,8 +51,8 @@ export type { Reservation, ReservationInput, RestaurantCfg, DB, ... } from "./ty
 Callers import by name from the barrel:
 
 ```ts
-import { makeReserve, makeCancel, makeUpdate, makeRestaurant } from "./modules/restaurant/index.ts";
-import type { RestaurantCfg, DB } from "./modules/restaurant/index.ts";
+import { makeReserve, makeCancel, makeUpdate, makeRestaurant } from "./domain/restaurant/index.ts";
+import type { RestaurantCfg, DB } from "./domain/restaurant/index.ts";
 ```
 
 You can restructure internals (rename a file, split a function) without

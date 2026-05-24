@@ -12,7 +12,7 @@ The `reserve` function never imports DynamoDB directly. It only knows about the
 `DB` interface:
 
 ```ts
-// src/modules/restaurant/types.ts  ← the domain owns this interface
+// src/domain/restaurant/types.ts  ← the domain owns this interface
 export interface DB {
   saveReservation:   (input: ReservationInput) => Promise<Reservation>;
   getReservations:   () => Promise<Reservation[]>;
@@ -21,9 +21,9 @@ export interface DB {
 }
 ```
 
-`DB` lives in `restaurant/types.ts` — not in `db/types.ts`. The domain defines
-what a database must be able to do; infrastructure satisfies that contract.
-This is the **Inward Dependency Rule**: `db/` imports from `restaurant/`, never
+`DB` lives in `domain/restaurant/types.ts` — not in `adapters/db/`. The domain defines
+what a database must be able to do; adapters satisfy that contract.
+This is the **Inward Dependency Rule**: `adapters/` imports from `domain/`, never
 the other way around.
 
 As long as something satisfies this shape, `reserve` doesn't care whether the
@@ -39,7 +39,7 @@ code (business rules) depends on an abstraction, not a concrete implementation.
 ### In-memory (tests and quick local runs)
 
 ```ts
-// src/modules/db/makeInMemoryDb.ts
+// src/adapters/db/makeInMemoryDb.ts
 type InMemoryDbCfg = { logger: Logger; generateId: () => string; };
 
 const makeInMemoryDb = ({ logger, generateId }: InMemoryDbCfg): DB => {
@@ -86,7 +86,7 @@ Key things to notice:
 ### DynamoDB (production / LocalStack)
 
 ```ts
-// src/modules/db/makeDynamoDb.ts
+// src/adapters/db/makeDynamoDb.ts
 type DynamoDbCfg = {
   tableName:  string;
   client:     DynamoDBDocumentClient;  // constructed and injected by server/index.ts
@@ -288,7 +288,7 @@ but are outside the scope of this learning project.
 
 | Layer         | File                        | What it does                              |
 |---------------|-----------------------------|-------------------------------------------|
-| Interface     | `src/modules/restaurant/types.ts` | Defines what a DB must be able to do (domain port) |
+| Interface     | `src/domain/restaurant/types.ts` | Defines what a DB must be able to do (domain port) |
 | In-memory impl | `makeInMemoryDb.ts`        | Fast, no deps — used in tests and by default |
 | DynamoDB impl | `makeDynamoDb.ts`           | Real AWS storage via DocumentClient       |
 | Wiring        | `src/server/compose.ts`     | Wires domain operations together          |

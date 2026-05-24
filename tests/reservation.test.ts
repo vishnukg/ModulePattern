@@ -1,7 +1,7 @@
 import { describe, it, expect }   from "vitest";
 import { randomUUID }              from "node:crypto";
 import makeServerApp               from "../src/server/compose.ts";
-import { makeInMemoryDb }          from "../src/modules/db/index.ts";
+import makeInMemoryDb              from "../src/adapters/db/makeInMemoryDb.ts";
 import makeSilentLogger            from "./helpers/silentLogger.ts";
 import makeFakeMetrics             from "./helpers/fakeMetrics.ts";
 

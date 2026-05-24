@@ -1,5 +1,5 @@
 import type { ReservationInput, DB, RestaurantCfg } from "./types.ts";
-import type { Logger, Metrics }                      from "../shared/index.ts";
+import type { Logger, Metrics }                      from "../../ports/index.ts";
 
 type UpdateCfg = { db: DB; restaurantCfg: RestaurantCfg; logger: Logger; metrics: Metrics; };
 

@@ -72,7 +72,7 @@ you edit in your editor.
 
 ```
 Error: something went wrong
-    at reserve (src/modules/restaurant/reserve.ts:8:5)   ← exact source location
+    at reserve (src/domain/restaurant/reserve.ts:8:5)   ← exact source location
 ```
 
 ### VS Code debugging

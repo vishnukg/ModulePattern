@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import express from "express";
 import request from "supertest";
-import makeRestaurantRouter from "../src/modules/http/makeRestaurantRouter.ts";
-import type { Restaurant } from "../src/modules/restaurant/types.ts";
+import makeRestaurantRouter from "../src/adapters/http/makeRestaurantRouter.ts";
+import type { Restaurant } from "../src/domain/restaurant/types.ts";
 
 const makeTestApp = (restaurant: Restaurant) => {
   const app = express();

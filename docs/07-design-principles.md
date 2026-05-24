@@ -35,7 +35,7 @@ Both should depend on abstractions (interfaces).
 `makeInMemoryDb` or `makeDynamoDb`. It only knows about the `DB` interface:
 
 ```ts
-// src/modules/restaurant/reserve.ts
+// src/domain/restaurant/reserve.ts
 const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
   const reserve = async ({ quantity, date }: Reservation) => {
     await db.saveReservation({ quantity, date });  // ← calls the interface, not an implementation
@@ -113,7 +113,9 @@ real world and the interface the domain expects.
           Restaurant port                  DB / Logger / Metrics ports
            (driving port)                     (driven ports)
            defined in                         defined in
-           restaurant/types.ts                restaurant/types.ts
+       domain/restaurant/types.ts        domain/restaurant/types.ts (DB)
+                                         ports/logger.ts (Logger)
+                                         ports/metrics.ts (Metrics)
 ```
 
 The domain defines *all* ports. Adapters depend on the domain; the domain
@@ -121,15 +123,15 @@ depends on nothing outside itself.
 
 **Where it lives in this codebase:**
 
-| Port          | Kind    | Defined in              | Adapters that satisfy it                    |
-|---------------|---------|-------------------------|---------------------------------------------|
-| `DB`          | Driven  | `restaurant/types.ts`   | `makeInMemoryDb`, `makeDynamoDb`            |
-| `Logger`      | Driven  | `logger/types.ts`       | `makeConsoleLogger`                         |
-| `Metrics`     | Driven  | `metrics/types.ts`      | `makeNoOpMetrics`                           |
-| `Restaurant`  | Driving | `restaurant/types.ts`   | `makeRestaurantRouter`, `cli/index.ts`      |
+| Port          | Kind    | Defined in                        | Adapters that satisfy it                    |
+|---------------|---------|-----------------------------------|---------------------------------------------|
+| `DB`          | Driven  | `domain/restaurant/types.ts`      | `makeInMemoryDb`, `makeDynamoDb`            |
+| `Logger`      | Driven  | `ports/logger.ts`                 | `makeConsoleLogger`                         |
+| `Metrics`     | Driven  | `ports/metrics.ts`                | `makeNoOpMetrics`                           |
+| `Restaurant`  | Driving | `domain/restaurant/types.ts`      | `makeRestaurantRouter`, `cli/index.ts`      |
 
-`DB` is defined inside `restaurant/types.ts` — the domain module — not inside
-`db/types.ts`. This is intentional: the domain asks "what do I need a data store
+`DB` is defined inside `domain/restaurant/types.ts` — the domain module — not inside
+`adapters/db/`. This is intentional: the domain asks "what do I need a data store
 to be able to do?" and the adapters answer by satisfying the interface. They
 depend on the domain; the domain does not depend on them.
 
@@ -161,17 +163,17 @@ Infrastructure imports from the domain.
 **Where it lives in this codebase:**
 
 ```
-logger/types.ts     ←── restaurant/types.ts  ←── db/makeInMemoryDb.ts
-metrics/types.ts    ←──      (domain)         ←── db/makeDynamoDb.ts
-                                              ←── http/makeRestaurantRouter.ts
-                                              ←── server/compose.ts
-                                              ←── cli/compose.ts
+ports/logger.ts          ←── domain/restaurant/  ←── adapters/db/makeInMemoryDb.ts
+ports/metrics.ts         ←──     (domain)         ←── adapters/db/makeDynamoDb.ts
+                                                  ←── adapters/http/makeRestaurantRouter.ts
+                                                  ←── server/compose.ts
+                                                  ←── cli/compose.ts
 ```
 
-`restaurant/types.ts` imports `Logger` and `Metrics` (abstract interfaces).
+`domain/restaurant/` imports `Logger` and `Metrics` (abstract interfaces from `ports/`).
 It does not import `consoleLogger.ts`, `makeDynamoDb.ts`, or `express`.
 
-`db/makeInMemoryDb.ts` imports `Reservation` and `DB` from `restaurant/types.ts`.
+`adapters/db/makeInMemoryDb.ts` imports `Reservation` and `DB` from `domain/restaurant/types.ts`.
 It imports *toward* the domain.
 
 **Why it matters:**
@@ -200,17 +202,18 @@ A module that contains business logic should not know about DynamoDB.
 
 **Where it lives in this codebase:**
 
-| Module            | Its one concern                        |
-|-------------------|----------------------------------------|
-| `restaurant/`     | Business rules (can we take this reservation?) |
-| `db/`             | Persistence (save and retrieve data)   |
-| `http/`           | HTTP transport (parse request, send response) |
-| `logger/`         | Structured log output                  |
-| `metrics/`        | Timing and counter instrumentation     |
-| `server/compose.ts` | Wiring domain ops for the HTTP server  |
-| `server/index.ts`   | HTTP server startup, infrastructure    |
-| `cli/compose.ts`    | Wiring domain ops for the CLI          |
-| `cli/index.ts`      | CLI entry point, infrastructure        |
+| Module                      | Its one concern                        |
+|-----------------------------|----------------------------------------|
+| `domain/restaurant/`        | Business rules (can we take this reservation?) |
+| `adapters/db/`              | Persistence (save and retrieve data)   |
+| `adapters/http/`            | HTTP transport (parse request, send response) |
+| `adapters/logger/`          | Structured log output                  |
+| `adapters/metrics/`         | Timing and counter instrumentation     |
+| `ports/`                    | Contracts (Logger, Metrics interfaces) |
+| `server/compose.ts`         | Wiring domain ops for the HTTP server  |
+| `server/index.ts`           | HTTP server startup, infrastructure    |
+| `cli/compose.ts`            | Wiring domain ops for the CLI          |
+| `cli/index.ts`              | CLI entry point, infrastructure        |
 
 `makeRestaurantRouter.ts` handles HTTP concerns — it reads `req.body`,
 validates the raw input, maps outcomes to status codes (201/422/400).
@@ -333,7 +336,7 @@ The outer function (`make*`) takes dependencies and returns the inner function
 **Where it lives in this codebase:**
 
 ```ts
-// src/modules/restaurant/reserve.ts
+// src/domain/restaurant/reserve.ts
 const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
   //                  ↑ dependencies declared here, as parameters
 
@@ -548,9 +551,8 @@ They are not production code. Treat the `src/` tree as the thing you ship.
 
 **Where it lives in this codebase:**
 
-`makeFakeMetrics` and `makeSilentLogger` are test helpers. They used to live in
-`src/modules/metrics/fakeMetrics.ts` and `src/modules/logger/silentLogger.ts`.
-They now live in `tests/helpers/`:
+`makeFakeMetrics` and `makeSilentLogger` are test helpers. They live in `tests/helpers/`,
+not in `src/` — they are not production code:
 
 ```
 tests/

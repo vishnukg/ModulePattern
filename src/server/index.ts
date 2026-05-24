@@ -3,10 +3,12 @@ import { DynamoDBClient }                            from "@aws-sdk/client-dynam
 import { DynamoDBDocumentClient }                    from "@aws-sdk/lib-dynamodb";
 import { randomUUID }                                from "node:crypto";
 import makeServerApp                                 from "./compose.ts";
-import { makeConsoleLogger, makeNoOpMetrics }         from "../modules/shared/index.ts";
-import { makeInMemoryDb, makeDynamoDb }              from "../modules/db/index.ts";
-import { makeRestaurantRouter }                      from "../modules/http/index.ts";
-import type { DB }                                   from "../modules/restaurant/index.ts";
+import makeConsoleLogger                             from "../adapters/logger/consoleLogger.ts";
+import makeNoOpMetrics                               from "../adapters/metrics/makeNoOpMetrics.ts";
+import makeInMemoryDb                                from "../adapters/db/makeInMemoryDb.ts";
+import makeDynamoDb                                  from "../adapters/db/makeDynamoDb.ts";
+import makeRestaurantRouter                          from "../adapters/http/makeRestaurantRouter.ts";
+import type { DB }                                   from "../domain/restaurant/index.ts";
 
 const port      = Number(process.env.PORT       ?? 3000);
 const tableSize = Number(process.env.TABLE_SIZE  ?? 10);
