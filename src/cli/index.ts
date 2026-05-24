@@ -26,12 +26,12 @@ const logger = makeConsoleLogger();
 const metrics = makeNoOpMetrics();
 const db = makeInMemoryDb({ logger, generateId: randomUUID });
 
-const { reserve } = makeCliApp({
+const { restaurant } = makeCliApp({
     restaurantCfg: { tableSize: seats },
     logger,
     metrics,
     db,
 });
-const result = await reserve({ quantity, date });
+const result = await restaurant.reserve({ quantity, date });
 
 console.log(`Reservation ${result} — ${quantity} seat(s) on ${date} (table size: ${seats})`);
