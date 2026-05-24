@@ -101,18 +101,21 @@ The filename is the function name (minus the `make` prefix for ops,
 full name for factories).
 
 ```
-src/domain/restaurant/
-  reserve.ts        ← makeReserve
-  makeCancel.ts     ← makeCancel
-  makeUpdate.ts     ← makeUpdate
-  makeRestaurant.ts ← makeRestaurant
-  types.ts          ← Reservation, DB, Restaurant, RestaurantCfg, ...
-  index.ts          ← barrel (named re-exports)
-
-src/ports/
-  logger.ts         ← Logger interface
-  metrics.ts        ← Metrics, FakeMetrics interfaces
-  index.ts          ← barrel (type-only re-exports)
+src/core/
+  index.ts                ← public barrel (re-exports everything below)
+  domain/restaurant/
+    reservation/          ← all reservation operations grouped here
+      reserve.ts            ← makeReserve
+      makeCancel.ts         ← makeCancel
+      makeUpdate.ts         ← makeUpdate
+      index.ts              ← reservation barrel
+    makeRestaurant.ts     ← makeRestaurant
+    types.ts              ← Reservation, DB, Restaurant, RestaurantCfg, ...
+    index.ts              ← restaurant barrel (re-exports reservation + types)
+  ports/
+    logger.ts             ← Logger interface
+    metrics.ts            ← Metrics, FakeMetrics interfaces
+    index.ts              ← ports barrel (type-only re-exports)
 
 src/adapters/
   db/
@@ -141,9 +144,9 @@ tests/helpers/
 Types live in a `types.ts` file next to the code that owns them.
 
 ```
-src/domain/restaurant/types.ts   ← Reservation, DB, Restaurant, and all domain types
-src/ports/logger.ts              ← Logger interface
-src/ports/metrics.ts             ← Metrics, FakeMetrics interfaces
+src/core/domain/restaurant/types.ts   ← Reservation, DB, Restaurant, and all domain types
+src/core/ports/logger.ts              ← Logger interface
+src/core/ports/metrics.ts             ← Metrics, FakeMetrics interfaces
 ```
 
 `domain/restaurant/types.ts` owns the `DB` interface because the domain defines
@@ -164,19 +167,17 @@ Each `index.ts` uses named re-exports to expose only what the module wants
 to share:
 
 ```ts
-// src/domain/restaurant/index.ts
-export { default as makeReserve }    from "./reserve.ts";
-export { default as makeCancel }     from "./makeCancel.ts";
-export { default as makeUpdate }     from "./makeUpdate.ts";
-export { default as makeRestaurant } from "./makeRestaurant.ts";
-export type { Reservation, DB, ... } from "./types.ts";
-
-// src/ports/index.ts  — type-only; implementations live in adapters/
-export type { Logger }               from "./logger.ts";
-export type { Metrics, FakeMetrics } from "./metrics.ts";
+// src/core/index.ts  — the only import path callers need
+export * from "./domain/restaurant/index.ts";
+export * from "./ports/index.ts";
 ```
 
-Callers import by name — the internal file structure is hidden.
+Callers import everything by name from one place — internal file structure is hidden:
+
+```ts
+import { makeReserve, makeCancel }      from "../core/index.ts";
+import type { DB, Logger, Metrics }     from "../core/index.ts";
+```
 
 #### Layers never import across boundaries
 
@@ -196,7 +197,7 @@ existing at all.
 
 Example: adding email confirmation when a reservation is accepted.
 
-1. Add an `Email` port interface to `src/ports/email.ts`
+1. Add an `Email` port interface to `src/core/ports/email.ts`
 2. Create `src/adapters/email/makeNodemailerEmail.ts` — one `make*` function implementing the port
 3. Update `ReserveCfg` in `domain/restaurant/types.ts` if `reserve` needs it
 4. Wire it in the relevant compose files: `const email = makeNodemailerEmail({ ... })`

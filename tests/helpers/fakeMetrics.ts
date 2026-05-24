@@ -1,4 +1,4 @@
-import type { FakeMetrics } from "../../src/ports/index.ts";
+import type { FakeMetrics } from "../../src/core/index.ts";
 
 const makeFakeMetrics = (): FakeMetrics => {
   const counters: Record<string, number>   = {};

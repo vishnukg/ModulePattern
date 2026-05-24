@@ -27,14 +27,14 @@ different implementations for production and testing.
 implementations will satisfy the same contract.
 
 ```ts
-// src/ports/logger.ts
+// src/core/ports/logger.ts
 export interface Logger {
   info: (message: string, data?: Record<string, unknown>) => void;
   warn: (message: string, data?: Record<string, unknown>) => void;
   error: (message: string, data?: Record<string, unknown>) => void;
 }
 
-// src/ports/metrics.ts
+// src/core/ports/metrics.ts
 export interface Metrics {
   increment: (name: string) => void;
   timing: (name: string, durationMs: number) => void;
@@ -182,7 +182,7 @@ it calls methods on *your* instance.
 ```ts
 import makeFakeMetrics  from "./helpers/fakeMetrics.ts";
 import makeSilentLogger from "./helpers/silentLogger.ts";
-import makeReserve      from "../src/domain/restaurant/reserve.ts";
+import { makeReserve } from "../src/core/index.ts";
 
 it("increments reservation.accepted on a successful reservation", async () => {
   const metrics = makeFakeMetrics();

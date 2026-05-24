@@ -8,7 +8,7 @@ import makeNoOpMetrics                               from "../adapters/metrics/m
 import makeInMemoryDb                                from "../adapters/db/makeInMemoryDb.ts";
 import makeDynamoDb                                  from "../adapters/db/makeDynamoDb.ts";
 import makeRestaurantRouter                          from "../adapters/http/makeRestaurantRouter.ts";
-import type { DB }                                   from "../domain/restaurant/index.ts";
+import type { DB }                                   from "../core/index.ts";
 
 const port      = Number(process.env.PORT       ?? 3000);
 const tableSize = Number(process.env.TABLE_SIZE  ?? 10);

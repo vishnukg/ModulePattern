@@ -1,5 +1,4 @@
-import type { DB, Reservation, ReservationInput } from "../../domain/restaurant/types.ts";
-import type { Logger }                            from "../../ports/logger.ts";
+import type { DB, Reservation, ReservationInput, Logger } from "../../core/index.ts";
 
 type InMemoryDbCfg = { logger: Logger; generateId: () => string; };
 

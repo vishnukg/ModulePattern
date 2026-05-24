@@ -12,7 +12,7 @@ The `reserve` function never imports DynamoDB directly. It only knows about the
 `DB` interface:
 
 ```ts
-// src/domain/restaurant/types.ts  ← the domain owns this interface
+// src/core/domain/restaurant/types.ts  ← the domain owns this interface
 export interface DB {
   saveReservation:   (input: ReservationInput) => Promise<Reservation>;
   getReservations:   () => Promise<Reservation[]>;
@@ -288,7 +288,7 @@ but are outside the scope of this learning project.
 
 | Layer         | File                        | What it does                              |
 |---------------|-----------------------------|-------------------------------------------|
-| Interface     | `src/domain/restaurant/types.ts` | Defines what a DB must be able to do (domain port) |
+| Interface     | `src/core/domain/restaurant/types.ts` | Defines what a DB must be able to do (domain port) |
 | In-memory impl | `makeInMemoryDb.ts`        | Fast, no deps — used in tests and by default |
 | DynamoDB impl | `makeDynamoDb.ts`           | Real AWS storage via DocumentClient       |
 | Wiring        | `src/server/compose.ts`     | Wires domain operations together          |

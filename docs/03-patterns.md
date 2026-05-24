@@ -16,7 +16,7 @@ The `make*` function is called once during wiring (in `compose.ts`).
 The returned operation is what's called at runtime — once per request.
 
 ```ts
-// src/domain/restaurant/reserve.ts
+// src/core/domain/restaurant/reservation/reserve.ts
 const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
   const reserve = async ({ quantity, date }: ReservationInput): Promise<"Accepted" | "Rejected"> => {
     if (quantity <= restaurantCfg.tableSize) {
@@ -40,19 +40,26 @@ As a module grows beyond one file, a barrel (`index.ts`) controls what
 the outside world can see. Internal implementation files stay private.
 
 ```ts
-// src/domain/restaurant/index.ts
-export { default as makeReserve }    from "./reserve.ts";
-export { default as makeCancel }     from "./makeCancel.ts";
-export { default as makeUpdate }     from "./makeUpdate.ts";
+// src/core/domain/restaurant/reservation/index.ts  — reservation operations
+export { default as makeReserve } from "./reserve.ts";
+export { default as makeCancel }  from "./makeCancel.ts";
+export { default as makeUpdate }  from "./makeUpdate.ts";
+
+// src/core/domain/restaurant/index.ts  — restaurant barrel
+export * from "./reservation/index.ts";
 export { default as makeRestaurant } from "./makeRestaurant.ts";
 export type { Reservation, ReservationInput, RestaurantCfg, DB, ... } from "./types.ts";
+
+// src/core/index.ts  — public barrel for the entire core layer
+export * from "./domain/restaurant/index.ts";
+export * from "./ports/index.ts";
 ```
 
-Callers import by name from the barrel:
+Callers import by name from the top-level core barrel:
 
 ```ts
-import { makeReserve, makeCancel, makeUpdate, makeRestaurant } from "./domain/restaurant/index.ts";
-import type { RestaurantCfg, DB } from "./domain/restaurant/index.ts";
+import { makeReserve, makeCancel, makeUpdate, makeRestaurant } from "./core/index.ts";
+import type { RestaurantCfg, DB, Logger, Metrics } from "./core/index.ts";
 ```
 
 You can restructure internals (rename a file, split a function) without

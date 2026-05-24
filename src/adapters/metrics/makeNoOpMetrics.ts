@@ -1,4 +1,4 @@
-import type { Metrics } from "../../ports/metrics.ts";
+import type { Metrics } from "../../core/index.ts";
 
 const makeNoOpMetrics = (): Metrics => ({
   increment: () => {},

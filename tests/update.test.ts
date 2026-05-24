@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
-import makeUpdate from "../src/domain/restaurant/makeUpdate.ts";
-import type { DB }      from "../src/domain/restaurant/types.ts";
-import type { Logger, Metrics } from "../src/ports/index.ts";
+import { makeUpdate } from "../src/core/index.ts";
+import type { DB }      from "../src/core/index.ts";
+import type { Logger, Metrics } from "../src/core/index.ts";
 
 const updatedReservation = { id: "stub-id", quantity: 4, date: "25/12/12" };
 

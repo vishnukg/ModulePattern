@@ -1,5 +1,5 @@
-import type { DB }              from "./types.ts";
-import type { Logger, Metrics } from "../../ports/index.ts";
+import type { DB }              from "../types.ts";
+import type { Logger, Metrics } from "../../../ports/index.ts";
 
 type CancelCfg = { db: DB; logger: Logger; metrics: Metrics; };
 

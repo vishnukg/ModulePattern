@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { randomUUID }   from "node:crypto";
 import makeInMemoryDb   from "../src/adapters/db/makeInMemoryDb.ts";
-import type { Logger } from "../src/ports/index.ts";
+import type { Logger } from "../src/core/index.ts";
 
 const stubLogger: Logger = { info: () => {}, warn: () => {}, error: () => {} };
 const cfg = { logger: stubLogger, generateId: randomUUID };

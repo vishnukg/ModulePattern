@@ -35,7 +35,7 @@ Both should depend on abstractions (interfaces).
 `makeInMemoryDb` or `makeDynamoDb`. It only knows about the `DB` interface:
 
 ```ts
-// src/domain/restaurant/reserve.ts
+// src/core/domain/restaurant/reservation/reserve.ts
 const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
   const reserve = async ({ quantity, date }: Reservation) => {
     await db.saveReservation({ quantity, date });  // ← calls the interface, not an implementation
@@ -336,7 +336,7 @@ The outer function (`make*`) takes dependencies and returns the inner function
 **Where it lives in this codebase:**
 
 ```ts
-// src/domain/restaurant/reserve.ts
+// src/core/domain/restaurant/reservation/reserve.ts
 const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
   //                  ↑ dependencies declared here, as parameters
 

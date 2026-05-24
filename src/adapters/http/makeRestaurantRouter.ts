@@ -1,5 +1,5 @@
 import type { Router }     from "express";
-import type { Restaurant } from "../../domain/restaurant/types.ts";
+import type { Restaurant } from "../../core/index.ts";
 
 type MakeRestaurantRouterCfg = { restaurant: Restaurant; router: Router; };
 

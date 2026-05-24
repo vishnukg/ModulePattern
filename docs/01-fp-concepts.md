@@ -154,7 +154,7 @@ The outer `make*` call configures the function once (at startup).
 The inner function is what's called at runtime (once per request).
 
 ```ts
-// src/domain/restaurant/reserve.ts
+// src/core/domain/restaurant/reservation/reserve.ts
 const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
   const reserve = async ({ quantity, date }: ReservationInput): Promise<"Accepted" | "Rejected"> => {
     if (quantity <= restaurantCfg.tableSize) {

@@ -1,6 +1,5 @@
-import { makeReserve, makeCancel, makeUpdate, makeRestaurant } from "../domain/restaurant/index.ts";
-import type { RestaurantCfg, DB }                              from "../domain/restaurant/index.ts";
-import type { Logger, Metrics }                                from "../ports/index.ts";
+import { makeReserve, makeCancel, makeUpdate, makeRestaurant } from "../core/index.ts";
+import type { RestaurantCfg, DB, Logger, Metrics }             from "../core/index.ts";
 
 type ServerAppCfg = {
   restaurantCfg: RestaurantCfg;

@@ -28,7 +28,7 @@ Start here, then read the files in order.
 | Functional DI | `makeReserve({ db, logger, metrics })` — deps as parameters |
 | Stubs vs mocks | Stubs: plain objects; mocks: `vi.fn()` only when asserting on calls |
 | AAA test pattern | Every test — Arrange / Act / Assert, no shared `beforeEach` state |
-| Barrel files | `src/domain/restaurant/index.ts` and `src/ports/index.ts` — named exports, control public API |
+| Barrel files | `src/core/index.ts` — single public barrel; re-exports all domain + port types |
 | Async at the boundary | `DB` interface is always async even for in-memory |
 | Test infrastructure | `tests/helpers/` — not in `src/` |
 | Source maps | `tsup.config.ts` `sourcemap: true` + `node --enable-source-maps` |
