@@ -49,10 +49,10 @@ const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
 
 ```ts
 export interface DB {
-  saveReservation:   (input: ReservationInput) => Promise<Reservation>;
-  getReservations:   () => Promise<Reservation[]>;
-  cancelReservation: (id: string) => Promise<boolean>;
-  updateReservation: (id: string, input: ReservationInput) => Promise<Reservation | null>;
+    saveReservation: (input: ReservationInput) => Promise<Reservation>;
+    getReservations: () => Promise<Reservation[]>;
+    cancelReservation: (id: string) => Promise<boolean>;
+    updateReservation: (id: string, input: ReservationInput) => Promise<Reservation | null>;
 }
 ```
 
@@ -89,11 +89,11 @@ real world and the interface the domain expects.
 
 **Two kinds of ports:**
 
-- **Driving ports** — the outside world calls *into* the domain through these.
+- **Driving ports** — the outside world calls _into_ the domain through these.
   They describe what callers can do with the domain.
   In this codebase: the `Restaurant` interface.
 
-- **Driven ports** — the domain calls *out* through these. They describe what
+- **Driven ports** — the domain calls _out_ through these. They describe what
   the domain needs from infrastructure.
   In this codebase: `DB`, `Logger`, `Metrics`.
 
@@ -118,17 +118,17 @@ real world and the interface the domain expects.
                                          ports/metrics.ts (Metrics)
 ```
 
-The domain defines *all* ports. Adapters depend on the domain; the domain
+The domain defines _all_ ports. Adapters depend on the domain; the domain
 depends on nothing outside itself.
 
 **Where it lives in this codebase:**
 
-| Port          | Kind    | Defined in                        | Adapters that satisfy it                    |
-|---------------|---------|-----------------------------------|---------------------------------------------|
-| `DB`          | Driven  | `domain/restaurant/types.ts`      | `makeInMemoryDb`, `makeDynamoDb`            |
-| `Logger`      | Driven  | `ports/logger.ts`                 | `makeConsoleLogger`                         |
-| `Metrics`     | Driven  | `ports/metrics.ts`                | `makeNoOpMetrics`                           |
-| `Restaurant`  | Driving | `domain/restaurant/types.ts`      | `makeRestaurantRouter`, `cli/index.ts`      |
+| Port         | Kind    | Defined in                   | Adapters that satisfy it               |
+| ------------ | ------- | ---------------------------- | -------------------------------------- |
+| `DB`         | Driven  | `domain/restaurant/types.ts` | `makeInMemoryDb`, `makeDynamoDb`       |
+| `Logger`     | Driven  | `ports/logger.ts`            | `makeConsoleLogger`                    |
+| `Metrics`    | Driven  | `ports/metrics.ts`           | `makeNoOpMetrics`                      |
+| `Restaurant` | Driving | `domain/restaurant/types.ts` | `makeRestaurantRouter`, `cli/index.ts` |
 
 `DB` is defined inside `domain/restaurant/types.ts` — the domain module — not inside
 `adapters/db/`. This is intentional: the domain asks "what do I need a data store
@@ -147,7 +147,7 @@ knowing anything about AWS, Express, or `console.log`.
 
 **How to apply it:**
 
-When you find yourself writing `import { DynamoDBClient } from "@aws-sdk/..."` 
+When you find yourself writing `import { DynamoDBClient } from "@aws-sdk/..."`
 inside a business logic file, stop. Define an interface for what you need
 (the port), put the AWS code in a separate file (the adapter), and inject the
 adapter at the composition root.
@@ -174,7 +174,7 @@ ports/metrics.ts         ←──     (domain)         ←── adapters/db/ma
 It does not import `consoleLogger.ts`, `makeDynamoDb.ts`, or `express`.
 
 `adapters/db/makeInMemoryDb.ts` imports `Reservation` and `DB` from `domain/restaurant/types.ts`.
-It imports *toward* the domain.
+It imports _toward_ the domain.
 
 **Why it matters:**
 
@@ -202,18 +202,18 @@ A module that contains business logic should not know about DynamoDB.
 
 **Where it lives in this codebase:**
 
-| Module                      | Its one concern                        |
-|-----------------------------|----------------------------------------|
-| `domain/restaurant/`        | Business rules (can we take this reservation?) |
-| `adapters/db/`              | Persistence (save and retrieve data)   |
-| `adapters/http/`            | HTTP transport (parse request, send response) |
-| `adapters/logger/`          | Structured log output                  |
-| `adapters/metrics/`         | Timing and counter instrumentation     |
-| `ports/`                    | Contracts (Logger, Metrics interfaces) |
-| `server/compose.ts`         | Wiring domain ops for the HTTP server  |
-| `server/index.ts`           | HTTP server startup, infrastructure    |
-| `cli/compose.ts`            | Wiring domain ops for the CLI          |
-| `cli/index.ts`              | CLI entry point, infrastructure        |
+| Module               | Its one concern                                |
+| -------------------- | ---------------------------------------------- |
+| `domain/restaurant/` | Business rules (can we take this reservation?) |
+| `adapters/db/`       | Persistence (save and retrieve data)           |
+| `adapters/http/`     | HTTP transport (parse request, send response)  |
+| `adapters/logger/`   | Structured log output                          |
+| `adapters/metrics/`  | Timing and counter instrumentation             |
+| `ports/`             | Contracts (Logger, Metrics interfaces)         |
+| `server/compose.ts`  | Wiring domain ops for the HTTP server          |
+| `server/index.ts`    | HTTP server startup, infrastructure            |
+| `cli/compose.ts`     | Wiring domain ops for the CLI                  |
+| `cli/index.ts`       | CLI entry point, infrastructure                |
 
 `makeRestaurantRouter.ts` handles HTTP concerns — it reads `req.body`,
 validates the raw input, maps outcomes to status codes (201/422/400).
@@ -241,21 +241,25 @@ If not, it has too many concerns.
 
 **Rule:** A module should have one reason to change.
 
-This is closely related to Separation of Concerns but focuses on *why* a file
+This is closely related to Separation of Concerns but focuses on _why_ a file
 would need to be edited, not just what it does.
 
 **Where it lives in this codebase:**
 
 `makeRestaurantRouter.ts` would only change if:
+
 - The API shape changes (different URL, different request/response format)
 
 `reserve.ts` would only change if:
+
 - The reservation business rules change (e.g., table size logic changes)
 
 `makeInMemoryDb.ts` would only change if:
+
 - The in-memory storage strategy changes
 
 `makeDynamoDb.ts` would only change if:
+
 - The DynamoDB interaction changes (different table schema, different SDK usage)
 
 Each file has exactly one reason to change.
@@ -289,11 +293,16 @@ infrastructure decisions inside them:
 ```ts
 // src/server/compose.ts
 const makeServerApp = ({ restaurantCfg, logger, metrics, db }: ServerAppCfg) => {
-  const reserve    = makeReserve({ db, logger, metrics, restaurantCfg });
-  const cancel     = makeCancel({ db, logger, metrics });
-  const update     = makeUpdate({ db, logger, metrics, restaurantCfg });
-  const restaurant = makeRestaurant({ reserve, cancel, update, getReservations: db.getReservations });
-  return { restaurant };
+    const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
+    const cancel = makeCancel({ db, logger, metrics });
+    const update = makeUpdate({ db, logger, metrics, restaurantCfg });
+    const restaurant = makeRestaurant({
+        reserve,
+        cancel,
+        update,
+        getReservations: db.getReservations,
+    });
+    return { restaurant };
 };
 ```
 
@@ -302,11 +311,21 @@ Infrastructure decisions (which logger? which db?) live in the entry points:
 ```ts
 // src/server/index.ts
 const logger = makeConsoleLogger();
-const db     = process.env.DYNAMODB_TABLE
-  ? makeDynamoDb({ tableName: process.env.DYNAMODB_TABLE, client, logger, generateId: randomUUID })
-  : makeInMemoryDb({ logger, generateId: randomUUID });
+const db = process.env.DYNAMODB_TABLE
+    ? makeDynamoDb({
+          tableName: process.env.DYNAMODB_TABLE,
+          client,
+          logger,
+          generateId: randomUUID,
+      })
+    : makeInMemoryDb({ logger, generateId: randomUUID });
 
-const { restaurant } = makeServerApp({ restaurantCfg: { tableSize }, logger, metrics, db });
+const { restaurant } = makeServerApp({
+    restaurantCfg: { tableSize },
+    logger,
+    metrics,
+    db,
+});
 ```
 
 `reserve.ts` never calls `makeConsoleLogger()` — it receives a logger.
@@ -352,6 +371,7 @@ const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
 ```
 
 The naming convention is consistent across every module:
+
 - The outer function is `make<OperationName>` — it takes deps and returns the operation
 - The inner function is named after the operation — it's what the caller invokes
 
@@ -390,10 +410,10 @@ In tests, stubs satisfy the same interface:
 ```ts
 // tests/reserve.test.ts
 const stubDb: DB = {
-  saveReservation:   async (input) => ({ id: "stub-id", ...input }),
-  getReservations:   async () => [],
-  cancelReservation: async () => false,
-  updateReservation: async () => null,
+    saveReservation: async (input) => ({ id: "stub-id", ...input }),
+    getReservations: async () => [],
+    cancelReservation: async () => false,
+    updateReservation: async () => null,
 };
 ```
 
@@ -421,29 +441,32 @@ Callers should not be forced to depend on methods they don't use.
 **Where it lives in this codebase:**
 
 `Logger` has exactly three methods:
+
 ```ts
 export interface Logger {
-  info: (message: string, data?: Record<string, unknown>) => void;
-  warn: (message: string, data?: Record<string, unknown>) => void;
-  error: (message: string, data?: Record<string, unknown>) => void;
+    info: (message: string, data?: Record<string, unknown>) => void;
+    warn: (message: string, data?: Record<string, unknown>) => void;
+    error: (message: string, data?: Record<string, unknown>) => void;
 }
 ```
 
 `Metrics` has exactly two:
+
 ```ts
 export interface Metrics {
-  increment: (name: string) => void;
-  timing:    (name: string, durationMs: number) => void;
+    increment: (name: string) => void;
+    timing: (name: string, durationMs: number) => void;
 }
 ```
 
 `DB` has exactly four — one for each operation the domain needs:
+
 ```ts
 export interface DB {
-  saveReservation:   (input: ReservationInput) => Promise<Reservation>;
-  getReservations:   () => Promise<Reservation[]>;
-  cancelReservation: (id: string) => Promise<boolean>;
-  updateReservation: (id: string, input: ReservationInput) => Promise<Reservation | null>;
+    saveReservation: (input: ReservationInput) => Promise<Reservation>;
+    getReservations: () => Promise<Reservation[]>;
+    cancelReservation: (id: string) => Promise<boolean>;
+    updateReservation: (id: string, input: ReservationInput) => Promise<Reservation | null>;
 }
 ```
 
@@ -475,21 +498,24 @@ make it async from the start — even when the current implementation is synchro
 **Where it lives in this codebase:**
 
 `makeInMemoryDb` does no real I/O. It could be synchronous:
+
 ```ts
-saveReservation: (input: ReservationInput) => Reservation     // sync, simpler
+saveReservation: (input: ReservationInput) => Reservation; // sync, simpler
 ```
 
 But the `DB` interface is defined as async:
+
 ```ts
-saveReservation: (input: ReservationInput) => Promise<Reservation>   // async
+saveReservation: (input: ReservationInput) => Promise<Reservation>; // async
 ```
 
 And the in-memory implementation matches:
+
 ```ts
 const saveReservation = async (input: ReservationInput): Promise<Reservation> => {
-  const reservation = { id: generateId(), ...input };
-  store.push(reservation);
-  return reservation;
+    const reservation = { id: generateId(), ...input };
+    store.push(reservation);
+    return reservation;
 };
 ```
 
@@ -588,14 +614,16 @@ about whether and how the function was called.
 Stubs in `reserve.test.ts` — these satisfy the interface and get out of the way:
 
 ```ts
-const noOp = async () => { throw new Error("not implemented"); };
-const stubDb: DB = {
-  saveReservation:   async (input) => ({ id: "stub-id", ...input }),
-  getReservations:   async () => [],
-  cancelReservation: async () => false,
-  updateReservation: async () => null,
+const noOp = async () => {
+    throw new Error("not implemented");
 };
-const stubLogger: Logger   = { info: () => {}, warn: () => {}, error: () => {} };
+const stubDb: DB = {
+    saveReservation: async (input) => ({ id: "stub-id", ...input }),
+    getReservations: async () => [],
+    cancelReservation: async () => false,
+    updateReservation: async () => null,
+};
+const stubLogger: Logger = { info: () => {}, warn: () => {}, error: () => {} };
 const stubMetrics: Metrics = { increment: () => {}, timing: () => {} };
 ```
 
@@ -627,7 +655,7 @@ verifying.
 **How to apply it:**
 
 Write stubs by default. Upgrade to a mock (`vi.fn()`) only when your assertion
-is `toHaveBeenCalled` / `toHaveBeenCalledWith` — i.e., when the *call itself*
+is `toHaveBeenCalled` / `toHaveBeenCalledWith` — i.e., when the _call itself_
 is the thing under test.
 
 ---
@@ -644,17 +672,20 @@ Every test in this codebase follows the pattern explicitly:
 
 ```ts
 it("calls restaurant.reserve with the parsed body", async () => {
-  // Arrange
-  const mockReserve = vi.fn(async (): Promise<"Accepted"> => "Accepted");
-  const restaurant: Restaurant = { reserve: mockReserve, getReservations: async () => [] };
+    // Arrange
+    const mockReserve = vi.fn(async (): Promise<"Accepted"> => "Accepted");
+    const restaurant: Restaurant = {
+        reserve: mockReserve,
+        getReservations: async () => [],
+    };
 
-  // Act
-  await request(makeTestApp(restaurant))
-    .post("/api/reservations")
-    .send({ quantity: 8, date: "12/12/25" });
+    // Act
+    await request(makeTestApp(restaurant))
+        .post("/api/reservations")
+        .send({ quantity: 8, date: "12/12/25" });
 
-  // Assert
-  expect(mockReserve).toHaveBeenCalledWith({ quantity: 8, date: "12/12/25" });
+    // Assert
+    expect(mockReserve).toHaveBeenCalledWith({ quantity: 8, date: "12/12/25" });
 });
 ```
 
@@ -664,7 +695,7 @@ Each test constructs its own state in the Arrange section. There is no
 **Why it matters:**
 
 `beforeEach` state is invisible at the test site. To understand a failing test
-you have to read the test *and* the setup block and mentally combine them.
+you have to read the test _and_ the setup block and mentally combine them.
 With AAA, the test is completely self-contained — everything relevant is visible
 in the test body.
 
@@ -674,7 +705,7 @@ because test A modified the shared object. Tests should never interact.
 **How to apply it:**
 
 Each test creates what it needs. If you find yourself writing `beforeEach`,
-ask whether each test actually needs *all* of the shared state, or whether
+ask whether each test actually needs _all_ of the shared state, or whether
 that state differs slightly between tests. If it differs, it belongs in the
 test body. If it's truly identical and the setup is genuinely expensive (e.g.,
 starting a real server), `beforeEach` is acceptable — but this is rare.
@@ -686,13 +717,14 @@ starting a real server), `beforeEach` is acceptable — but this is rare.
 These aren't independent rules. They reinforce each other:
 
 - **DIP** gives you interfaces → **Program to interfaces** becomes natural
-- Interfaces let you **inject dependencies functionally** → tests use **stubs and mocks** instead of real infrastructure  
+- Interfaces let you **inject dependencies functionally** → tests use **stubs and mocks** instead of real infrastructure
 - **Separation of concerns** into modules → the **inward dependency rule** tells you which direction imports should point
 - **Ports and adapters** is the architectural shape that DIP and SoC produce together
 - **Composition root** is where all the functional DI wires come together
 - **Async at the boundary** is DIP applied to the dimension of time (sync vs async)
 
 If you follow them all, you end up with a codebase where:
+
 - Business logic is readable without knowing about any infrastructure
 - Tests are fast because they never touch real databases or networks
 - Swapping a dependency (in-memory → DynamoDB, console → structured logger) is a one-line change at the composition root

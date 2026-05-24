@@ -21,8 +21,8 @@ When TypeScript can figure out the type from context, you don't need to
 write it — this is called **type inference**:
 
 ```ts
-const x = 5;        // TypeScript infers: number
-const y = "hello";  // TypeScript infers: string
+const x = 5; // TypeScript infers: number
+const y = "hello"; // TypeScript infers: string
 ```
 
 ---
@@ -35,11 +35,12 @@ Both describe the shape of an object.
 type Reservation = { id: string; quantity: number; date: string };
 
 interface Logger {
-  info: (message: string, data?: Record<string, unknown>) => void;
+    info: (message: string, data?: Record<string, unknown>) => void;
 }
 ```
 
 In this project:
+
 - `type` is used for data shapes (`Reservation`, `ReservationInput`, `RestaurantCfg`, config objects)
 - `interface` is used when multiple implementations are expected (`Logger`, `Metrics`, `FakeMetrics`)
 
@@ -61,9 +62,11 @@ one function that works with many types while TypeScript still checks each use.
 const first = (arr: string[]): string => arr[0]!;
 
 // with generics — works for any array
-function first<T>(arr: T[]): T { return arr[0]!; }
+function first<T>(arr: T[]): T {
+    return arr[0]!;
+}
 
-first([1, 2, 3]);        // TypeScript infers T = number, returns number
+first([1, 2, 3]); // TypeScript infers T = number, returns number
 first(["a", "b", "c"]); // TypeScript infers T = string, returns string
 ```
 
@@ -76,10 +79,10 @@ In this project generics appear in the `DB` interface — `Promise<T>` means
 ```ts
 // src/core/domain/restaurant/types.ts
 export type DB = {
-  saveReservation:   (input: ReservationInput) => Promise<Reservation>;
-  getReservations:   () => Promise<Reservation[]>;
-  cancelReservation: (id: string) => Promise<boolean>;
-  updateReservation: (id: string, input: ReservationInput) => Promise<Reservation | null>;
+    saveReservation: (input: ReservationInput) => Promise<Reservation>;
+    getReservations: () => Promise<Reservation[]>;
+    cancelReservation: (id: string) => Promise<boolean>;
+    updateReservation: (id: string, input: ReservationInput) => Promise<Reservation | null>;
 };
 ```
 
@@ -97,8 +100,12 @@ handle every possibility before you can use the value.
 type Result = "Accepted" | "Rejected";
 
 const handle = (result: Result) => {
-  if (result === "Accepted") { /* ... */ }
-  if (result === "Rejected") { /* ... */ }
+    if (result === "Accepted") {
+        /* ... */
+    }
+    if (result === "Rejected") {
+        /* ... */
+    }
 };
 ```
 
@@ -146,7 +153,7 @@ This project uses intersection via `{ id: string, ...input }` — the
 
 ```ts
 type ReservationInput = { quantity: number; date: string };
-type Reservation      = { id: string; quantity: number; date: string };
+type Reservation = { id: string; quantity: number; date: string };
 
 // In makeInMemoryDb:
 const reservation: Reservation = { id: randomUUID(), ...input };
@@ -162,14 +169,14 @@ One interface can extend another to inherit all its methods and add more.
 
 ```ts
 interface Metrics {
-  increment: (name: string) => void;
-  timing: (name: string, durationMs: number) => void;
+    increment: (name: string) => void;
+    timing: (name: string, durationMs: number) => void;
 }
 
 interface FakeMetrics extends Metrics {
-  // inherits increment and timing, adds:
-  getCounter: (name: string) => number;
-  getTimings: (name: string) => number[];
+    // inherits increment and timing, adds:
+    getCounter: (name: string) => number;
+    getTimings: (name: string) => number[];
 }
 ```
 

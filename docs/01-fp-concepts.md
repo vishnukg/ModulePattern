@@ -14,13 +14,16 @@ pass it to another function, or return it from one.
 const greet = (name: string) => `Hello, ${name}`;
 
 // passed to another function
-const runTwice = (fn: () => void) => { fn(); fn(); };
+const runTwice = (fn: () => void) => {
+    fn();
+    fn();
+};
 
 // returned from a function  ← the key one for this project
 const makeAdder = (x: number) => (y: number) => x + y;
 
 const add5 = makeAdder(5);
-add5(3);  // 8
+add5(3); // 8
 add5(10); // 15
 ```
 
@@ -62,12 +65,14 @@ the outer function's variables even after the outer function has finished.
 
 ```ts
 const makeCounter = () => {
-  let count = 0; // private — nothing outside can reach this
+    let count = 0; // private — nothing outside can reach this
 
-  return {
-    increment: () => { count++; },
-    value:     () => count,
-  };
+    return {
+        increment: () => {
+            count++;
+        },
+        value: () => count,
+    };
 };
 
 const counter = makeCounter();
@@ -86,17 +91,22 @@ only way to interact with it. This is **encapsulation without classes**.
 ```ts
 // src/adapters/db/makeInMemoryDb.ts
 const makeInMemoryDb = ({ logger }: InMemoryDbCfg): DB => {
-  const store: Reservation[] = []; // private, lives in the closure
+    const store: Reservation[] = []; // private, lives in the closure
 
-  const saveReservation = async (input: ReservationInput): Promise<Reservation> => {
-    const reservation = { id: randomUUID(), ...input };
-    store.push(reservation);       // mutates the private store
-    return reservation;
-  };
+    const saveReservation = async (input: ReservationInput): Promise<Reservation> => {
+        const reservation = { id: randomUUID(), ...input };
+        store.push(reservation); // mutates the private store
+        return reservation;
+    };
 
-  const getReservations = async (): Promise<Reservation[]> => [...store];
+    const getReservations = async (): Promise<Reservation[]> => [...store];
 
-  return { saveReservation, getReservations, cancelReservation, updateReservation };
+    return {
+        saveReservation,
+        getReservations,
+        cancelReservation,
+        updateReservation,
+    };
 };
 ```
 
@@ -156,14 +166,17 @@ The inner function is what's called at runtime (once per request).
 ```ts
 // src/core/domain/restaurant/reservation/reserve.ts
 const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
-  const reserve = async ({ quantity, date }: ReservationInput): Promise<"Accepted" | "Rejected"> => {
-    if (quantity <= restaurantCfg.tableSize) {
-      await db.saveReservation({ quantity, date });
-      return "Accepted";
-    }
-    return "Rejected";
-  };
-  return reserve;
+    const reserve = async ({
+        quantity,
+        date,
+    }: ReservationInput): Promise<"Accepted" | "Rejected"> => {
+        if (quantity <= restaurantCfg.tableSize) {
+            await db.saveReservation({ quantity, date });
+            return "Accepted";
+        }
+        return "Rejected";
+    };
+    return reserve;
 };
 ```
 
@@ -174,8 +187,13 @@ in tests you can pass a fake `db` without touching real infrastructure.
 results together, and hands them to the HTTP layer:
 
 ```ts
-const reserve    = makeReserve({ db, logger, metrics, restaurantCfg });
-const cancel     = makeCancel({ db, logger, metrics });
-const update     = makeUpdate({ db, logger, metrics, restaurantCfg });
-const restaurant = makeRestaurant({ reserve, cancel, update, getReservations: db.getReservations });
+const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
+const cancel = makeCancel({ db, logger, metrics });
+const update = makeUpdate({ db, logger, metrics, restaurantCfg });
+const restaurant = makeRestaurant({
+    reserve,
+    cancel,
+    update,
+    getReservations: db.getReservations,
+});
 ```

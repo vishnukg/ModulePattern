@@ -27,6 +27,7 @@ for **erasable syntax** — types that can be stripped by replacing them with
 whitespace, without any code transformation needed.
 
 The constructs Node.js cannot handle:
+
 - `enum` (generates runtime code)
 - Namespace blocks with runtime values
 - Parameter properties (`constructor(public x: string)`)
@@ -88,16 +89,16 @@ Or add a launch configuration to `.vscode/launch.json`:
 
 ```json
 {
-  "version": "0.2.0",
-  "configurations": [
-    {
-      "type": "node",
-      "request": "launch",
-      "name": "Debug server",
-      "program": "${workspaceFolder}/src/server/index.ts",
-      "runtimeArgs": ["--watch"]
-    }
-  ]
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Debug server",
+            "program": "${workspaceFolder}/src/server/index.ts",
+            "runtimeArgs": ["--watch"]
+        }
+    ]
 }
 ```
 
@@ -109,12 +110,12 @@ Or add a launch configuration to `.vscode/launch.json`:
 for normal development or for deploying a server. It exists for specific
 scenarios where you need a compiled artefact:
 
-| Scenario | Use build? |
-|---|---|
-| Long-running server (Docker, EC2, Railway, Fly.io) | No — `npm start` is sufficient |
-| AWS Lambda | Yes — bundle everything into a single file for cold-start performance |
-| Distributing a CLI as an npm package | Yes — consumers should not need TypeScript installed |
-| CI/CD pipeline health check | Optional — `npm run typecheck` covers type safety |
+| Scenario                                           | Use build?                                                            |
+| -------------------------------------------------- | --------------------------------------------------------------------- |
+| Long-running server (Docker, EC2, Railway, Fly.io) | No — `npm start` is sufficient                                        |
+| AWS Lambda                                         | Yes — bundle everything into a single file for cold-start performance |
+| Distributing a CLI as an npm package               | Yes — consumers should not need TypeScript installed                  |
+| CI/CD pipeline health check                        | Optional — `npm run typecheck` covers type safety                     |
 
 When you do need it:
 
@@ -149,14 +150,14 @@ bundle `node_modules` into the output. Everything else stays the same.
 
 ## npm scripts reference
 
-| Script | Command | When to use |
-|---|---|---|
-| `npm run server` | `node --watch src/server/index.ts` | Daily development |
-| `npm run server:dynamo` | same + DynamoDB env vars | Dev against LocalStack |
-| `npm start` | `node src/server/index.ts` | Production server |
-| `npm run start:dynamo` | same + DynamoDB env vars | Production with DynamoDB |
-| `npm run cli` | `node src/cli/index.ts` | Run the CLI |
-| `npm run typecheck` | `tsc --noEmit` | Before every deploy, in CI |
-| `npm run build` | typecheck + tsup | Lambda / package distribution only |
-| `npm test` | vitest | Always |
-| `npm run lint` | eslint | Always |
+| Script                  | Command                            | When to use                        |
+| ----------------------- | ---------------------------------- | ---------------------------------- |
+| `npm run server`        | `node --watch src/server/index.ts` | Daily development                  |
+| `npm run server:dynamo` | same + DynamoDB env vars           | Dev against LocalStack             |
+| `npm start`             | `node src/server/index.ts`         | Production server                  |
+| `npm run start:dynamo`  | same + DynamoDB env vars           | Production with DynamoDB           |
+| `npm run cli`           | `node src/cli/index.ts`            | Run the CLI                        |
+| `npm run typecheck`     | `tsc --noEmit`                     | Before every deploy, in CI         |
+| `npm run build`         | typecheck + tsup                   | Lambda / package distribution only |
+| `npm test`              | vitest                             | Always                             |
+| `npm run lint`          | eslint                             | Always                             |

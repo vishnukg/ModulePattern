@@ -15,6 +15,7 @@ import { makeReserve } from "./domain/restaurant";
 ```
 
 It needs to figure out which file that refers to. Is it:
+
 - `./domain/restaurant.ts`?
 - `./domain/restaurant/index.ts`?
 - Something else?
@@ -97,23 +98,23 @@ there is no output, so the flag is safe to enable.
 All imports in this project therefore look like:
 
 ```ts
-import { makeReserve } from "../domain/restaurant/index.ts";  // ✓
-import { makeReserve } from "../domain/restaurant";           // ✗ — directory import forbidden
+import { makeReserve } from "../domain/restaurant/index.ts"; // ✓
+import { makeReserve } from "../domain/restaurant"; // ✗ — directory import forbidden
 ```
 
 ---
 
 ## Summary
 
-| Setting            | Use when                                 | Directory imports | Optional extensions |
-|--------------------|------------------------------------------|:-----------------:|:-------------------:|
-| `nodenext`         | Running raw Node.js native ESM           | ✗                 | ✗                   |
-| `bundler`          | Using tsx, Vite, esbuild, or any bundler | ✓                 | ✓                   |
-| `node` (legacy)    | Old CommonJS projects                    | ✓                 | ✓                   |
+| Setting         | Use when                                 | Directory imports | Optional extensions |
+| --------------- | ---------------------------------------- | :---------------: | :-----------------: |
+| `nodenext`      | Running raw Node.js native ESM           |         ✗         |          ✗          |
+| `bundler`       | Using tsx, Vite, esbuild, or any bundler |         ✓         |          ✓          |
+| `node` (legacy) | Old CommonJS projects                    |         ✓         |          ✓          |
 
 **Is it advised?**
 
-Yes — for a project running with native Node.js, `"nodenext"` is the *correct*
+Yes — for a project running with native Node.js, `"nodenext"` is the _correct_
 setting. It makes the TypeScript configuration accurately describe how the
 project actually runs. If you later switch to `tsx` or Vite, the right move is
 to switch to `"bundler"` — not `"nodenext"` — because those tools handle

@@ -29,25 +29,25 @@ implementations will satisfy the same contract.
 ```ts
 // src/core/ports/logger.ts
 export interface Logger {
-  info: (message: string, data?: Record<string, unknown>) => void;
-  warn: (message: string, data?: Record<string, unknown>) => void;
-  error: (message: string, data?: Record<string, unknown>) => void;
+    info: (message: string, data?: Record<string, unknown>) => void;
+    warn: (message: string, data?: Record<string, unknown>) => void;
+    error: (message: string, data?: Record<string, unknown>) => void;
 }
 
 // src/core/ports/metrics.ts
 export interface Metrics {
-  increment: (name: string) => void;
-  timing: (name: string, durationMs: number) => void;
+    increment: (name: string) => void;
+    timing: (name: string, durationMs: number) => void;
 }
 
 export interface FakeMetrics extends Metrics {
-  getCounter: (name: string) => number;
-  getTimings: (name: string) => number[];
+    getCounter: (name: string) => number;
+    getTimings: (name: string) => number[];
 }
 ```
 
-These interfaces describe *what* the concern does, with no knowledge of
-*how* it does it. `reserve.ts` knows about `Logger` and `Metrics` —
+These interfaces describe _what_ the concern does, with no knowledge of
+_how_ it does it. `reserve.ts` knows about `Logger` and `Metrics` —
 it knows nothing about consoles, StatsD, DataDog, or any specific tool.
 
 `FakeMetrics extends Metrics` means it satisfies the `Metrics` contract
@@ -62,12 +62,9 @@ inspection methods used in tests.
 
 ```ts
 export default (): Logger => ({
-  info: (message, data) =>
-    console.log(JSON.stringify({ level: "info", message, ...data })),
-  warn: (message, data) =>
-    console.warn(JSON.stringify({ level: "warn", message, ...data })),
-  error: (message, data) =>
-    console.error(JSON.stringify({ level: "error", message, ...data })),
+    info: (message, data) => console.log(JSON.stringify({ level: "info", message, ...data })),
+    warn: (message, data) => console.warn(JSON.stringify({ level: "warn", message, ...data })),
+    error: (message, data) => console.error(JSON.stringify({ level: "error", message, ...data })),
 });
 ```
 
@@ -75,9 +72,9 @@ export default (): Logger => ({
 
 ```ts
 const makeSilentLogger = (): Logger => ({
-  info: () => {},
-  warn: () => {},
-  error: () => {},
+    info: () => {},
+    warn: () => {},
+    error: () => {},
 });
 ```
 
@@ -85,19 +82,23 @@ const makeSilentLogger = (): Logger => ({
 
 ```ts
 const makeFakeMetrics = (): FakeMetrics => {
-  const counters: Record<string, number>   = {};
-  const timings:  Record<string, number[]> = {};
+    const counters: Record<string, number> = {};
+    const timings: Record<string, number[]> = {};
 
-  return {
-    increment(name) {
-      counters[name] = (counters[name] ?? 0) + 1;
-    },
-    timing(name, durationMs) {
-      timings[name] = [...(timings[name] ?? []), durationMs];
-    },
-    getCounter(name) { return counters[name] ?? 0; },
-    getTimings(name) { return timings[name] ?? []; },
-  };
+    return {
+        increment(name) {
+            counters[name] = (counters[name] ?? 0) + 1;
+        },
+        timing(name, durationMs) {
+            timings[name] = [...(timings[name] ?? []), durationMs];
+        },
+        getCounter(name) {
+            return counters[name] ?? 0;
+        },
+        getTimings(name) {
+            return timings[name] ?? [];
+        },
+    };
 };
 ```
 
@@ -117,24 +118,28 @@ and calls them at the right moments:
 
 ```ts
 const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
-  const reserve = async ({ quantity, date }: ReservationInput) => {
-    const start = Date.now();
-    logger.info("reservation attempt", { quantity, date });
+    const reserve = async ({ quantity, date }: ReservationInput) => {
+        const start = Date.now();
+        logger.info("reservation attempt", { quantity, date });
 
-    if (quantity <= restaurantCfg.tableSize) {
-      await db.saveReservation({ quantity, date });
-      metrics.increment("reservation.accepted");
-      metrics.timing("reservation.duration_ms", Date.now() - start);
-      logger.info("reservation accepted", { quantity, date });
-      return "Accepted";
-    }
+        if (quantity <= restaurantCfg.tableSize) {
+            await db.saveReservation({ quantity, date });
+            metrics.increment("reservation.accepted");
+            metrics.timing("reservation.duration_ms", Date.now() - start);
+            logger.info("reservation accepted", { quantity, date });
+            return "Accepted";
+        }
 
-    metrics.increment("reservation.rejected");
-    metrics.timing("reservation.duration_ms", Date.now() - start);
-    logger.warn("reservation rejected", { quantity, date, tableSize: restaurantCfg.tableSize });
-    return "Rejected";
-  };
-  return reserve;
+        metrics.increment("reservation.rejected");
+        metrics.timing("reservation.duration_ms", Date.now() - start);
+        logger.warn("reservation rejected", {
+            quantity,
+            date,
+            tableSize: restaurantCfg.tableSize,
+        });
+        return "Rejected";
+    };
+    return reserve;
 };
 ```
 
@@ -177,26 +182,26 @@ a real metrics sink (StatsD, DataDog), implement `Metrics` and pass it from
 
 Create a `makeFakeMetrics()` instance before wiring, pass the same instance
 in, and keep your reference. When `reserve` calls `metrics.increment(...)`,
-it calls methods on *your* instance.
+it calls methods on _your_ instance.
 
 ```ts
-import makeFakeMetrics  from "./helpers/fakeMetrics.ts";
+import makeFakeMetrics from "./helpers/fakeMetrics.ts";
 import makeSilentLogger from "./helpers/silentLogger.ts";
 import { makeReserve } from "../src/core/index.ts";
 
 it("increments reservation.accepted on a successful reservation", async () => {
-  const metrics = makeFakeMetrics();
-  const reserve = makeReserve({
-    db: stubDb,
-    restaurantCfg: { tableSize: 12 },
-    logger: makeSilentLogger(),
-    metrics,
-  });
+    const metrics = makeFakeMetrics();
+    const reserve = makeReserve({
+        db: stubDb,
+        restaurantCfg: { tableSize: 12 },
+        logger: makeSilentLogger(),
+        metrics,
+    });
 
-  await reserve({ quantity: 10, date: "2024-12-12" });
+    await reserve({ quantity: 10, date: "2024-12-12" });
 
-  expect(metrics.getCounter("reservation.accepted")).toBe(1);
-  expect(metrics.getCounter("reservation.rejected")).toBe(0);
+    expect(metrics.getCounter("reservation.accepted")).toBe(1);
+    expect(metrics.getCounter("reservation.rejected")).toBe(0);
 });
 ```
 
@@ -208,12 +213,17 @@ You can also assert on timing:
 
 ```ts
 it("records a timing for every attempt regardless of outcome", async () => {
-  const metrics = makeFakeMetrics();
-  const reserve = makeReserve({ db: stubDb, restaurantCfg: { tableSize: 12 }, logger: makeSilentLogger(), metrics });
+    const metrics = makeFakeMetrics();
+    const reserve = makeReserve({
+        db: stubDb,
+        restaurantCfg: { tableSize: 12 },
+        logger: makeSilentLogger(),
+        metrics,
+    });
 
-  await reserve({ quantity: 10, date: "2024-12-12" });
-  await reserve({ quantity: 13, date: "2024-12-12" });
+    await reserve({ quantity: 10, date: "2024-12-12" });
+    await reserve({ quantity: 13, date: "2024-12-12" });
 
-  expect(metrics.getTimings("reservation.duration_ms")).toHaveLength(2);
+    expect(metrics.getTimings("reservation.duration_ms")).toHaveLength(2);
 });
 ```

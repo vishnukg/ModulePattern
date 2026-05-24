@@ -18,14 +18,17 @@ The returned operation is what's called at runtime — once per request.
 ```ts
 // src/core/domain/restaurant/reservation/reserve.ts
 const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
-  const reserve = async ({ quantity, date }: ReservationInput): Promise<"Accepted" | "Rejected"> => {
-    if (quantity <= restaurantCfg.tableSize) {
-      await db.saveReservation({ quantity, date });
-      return "Accepted";
-    }
-    return "Rejected";
-  };
-  return reserve;
+    const reserve = async ({
+        quantity,
+        date,
+    }: ReservationInput): Promise<"Accepted" | "Rejected"> => {
+        if (quantity <= restaurantCfg.tableSize) {
+            await db.saveReservation({ quantity, date });
+            return "Accepted";
+        }
+        return "Rejected";
+    };
+    return reserve;
 };
 ```
 
@@ -78,20 +81,25 @@ domain operations together for that specific context.
 ```ts
 // src/server/compose.ts
 const makeServerApp = ({ restaurantCfg, logger, metrics, db }: ServerAppCfg) => {
-  const reserve    = makeReserve({ db, logger, metrics, restaurantCfg });
-  const cancel     = makeCancel({ db, logger, metrics });
-  const update     = makeUpdate({ db, logger, metrics, restaurantCfg });
-  const restaurant = makeRestaurant({ reserve, cancel, update, getReservations: db.getReservations });
+    const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
+    const cancel = makeCancel({ db, logger, metrics });
+    const update = makeUpdate({ db, logger, metrics, restaurantCfg });
+    const restaurant = makeRestaurant({
+        reserve,
+        cancel,
+        update,
+        getReservations: db.getReservations,
+    });
 
-  return { restaurant };
+    return { restaurant };
 };
 ```
 
 ```ts
 // src/cli/compose.ts
 const makeCliApp = ({ restaurantCfg, logger, metrics, db }: CliAppCfg) => {
-  const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
-  return { reserve };
+    const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
+    return { reserve };
 };
 ```
 
@@ -101,13 +109,23 @@ those decisions:
 
 ```ts
 // src/server/index.ts  — infrastructure decisions live here
-const logger  = makeConsoleLogger();
+const logger = makeConsoleLogger();
 const metrics = makeNoOpMetrics();
-const db      = process.env.DYNAMODB_TABLE
-  ? makeDynamoDb({ tableName: process.env.DYNAMODB_TABLE, client, logger, generateId: randomUUID })
-  : makeInMemoryDb({ logger, generateId: randomUUID });
+const db = process.env.DYNAMODB_TABLE
+    ? makeDynamoDb({
+          tableName: process.env.DYNAMODB_TABLE,
+          client,
+          logger,
+          generateId: randomUUID,
+      })
+    : makeInMemoryDb({ logger, generateId: randomUUID });
 
-const { restaurant } = makeServerApp({ restaurantCfg: { tableSize }, logger, metrics, db });
+const { restaurant } = makeServerApp({
+    restaurantCfg: { tableSize },
+    logger,
+    metrics,
+    db,
+});
 ```
 
 This keeps infrastructure decisions (which logger? which db?) at the outermost
@@ -126,12 +144,12 @@ interaction with that dependency:
 ```ts
 // tests/reserve.test.ts
 const stubDb: DB = {
-  saveReservation:   async (input) => ({ id: "stub-id", ...input }),
-  getReservations:   async () => [],
-  cancelReservation: async () => true,
-  updateReservation: async () => null,
+    saveReservation: async (input) => ({ id: "stub-id", ...input }),
+    getReservations: async () => [],
+    cancelReservation: async () => true,
+    updateReservation: async () => null,
 };
-const stubLogger: Logger   = { info: () => {}, warn: () => {}, error: () => {} };
+const stubLogger: Logger = { info: () => {}, warn: () => {}, error: () => {} };
 const stubMetrics: Metrics = { increment: () => {}, timing: () => {} };
 ```
 
@@ -140,20 +158,28 @@ itself (was it called? with what arguments?):
 
 ```ts
 it("calls db.saveReservation with the reservation on acceptance", async () => {
-  const mockDb: DB = {
-    ...stubDb,
-    saveReservation: vi.fn(async (input) => ({ id: "mock-id", ...input })),
-  };
-  const reserve = makeReserve({ db: mockDb, restaurantCfg: { tableSize: 10 }, logger: stubLogger, metrics: stubMetrics });
+    const mockDb: DB = {
+        ...stubDb,
+        saveReservation: vi.fn(async (input) => ({ id: "mock-id", ...input })),
+    };
+    const reserve = makeReserve({
+        db: mockDb,
+        restaurantCfg: { tableSize: 10 },
+        logger: stubLogger,
+        metrics: stubMetrics,
+    });
 
-  await reserve({ quantity: 8, date: "12/12/12" });
+    await reserve({ quantity: 8, date: "12/12/12" });
 
-  expect(mockDb.saveReservation).toHaveBeenCalledWith({ quantity: 8, date: "12/12/12" });
+    expect(mockDb.saveReservation).toHaveBeenCalledWith({
+        quantity: 8,
+        date: "12/12/12",
+    });
 });
 ```
 
 The rule: use a stub when you need a valid dep to avoid errors; use a mock
-when the test is specifically about *how* the dep is used.
+when the test is specifically about _how_ the dep is used.
 
 No test setup files, no global state, no class instantiation.
 Each test creates exactly what it needs, nothing more.
@@ -171,8 +197,18 @@ a fresh `db` with an empty store.
 
 ```ts
 // Each call creates a fresh in-memory store — tests never interfere
-const { restaurant: r1 } = makeServerApp({ restaurantCfg: { tableSize: 10 }, logger, metrics, db: makeInMemoryDb({ logger, generateId: randomUUID }) });
-const { restaurant: r2 } = makeServerApp({ restaurantCfg: { tableSize: 10 }, logger, metrics, db: makeInMemoryDb({ logger, generateId: randomUUID }) });
+const { restaurant: r1 } = makeServerApp({
+    restaurantCfg: { tableSize: 10 },
+    logger,
+    metrics,
+    db: makeInMemoryDb({ logger, generateId: randomUUID }),
+});
+const { restaurant: r2 } = makeServerApp({
+    restaurantCfg: { tableSize: 10 },
+    logger,
+    metrics,
+    db: makeInMemoryDb({ logger, generateId: randomUUID }),
+});
 // r1 and r2 are completely isolated
 ```
 

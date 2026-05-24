@@ -1,8 +1,8 @@
 import type { Metrics } from "../../core/index.ts";
 
 const makeNoOpMetrics = (): Metrics => ({
-  increment: () => {},
-  timing:    () => {},
+    increment: () => {},
+    timing: () => {},
 });
 
 export default makeNoOpMetrics;

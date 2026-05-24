@@ -14,10 +14,10 @@ The `reserve` function never imports DynamoDB directly. It only knows about the
 ```ts
 // src/core/domain/restaurant/types.ts  ← the domain owns this interface
 export interface DB {
-  saveReservation:   (input: ReservationInput) => Promise<Reservation>;
-  getReservations:   () => Promise<Reservation[]>;
-  cancelReservation: (id: string) => Promise<boolean>;
-  updateReservation: (id: string, input: ReservationInput) => Promise<Reservation | null>;
+    saveReservation: (input: ReservationInput) => Promise<Reservation>;
+    getReservations: () => Promise<Reservation[]>;
+    cancelReservation: (id: string) => Promise<boolean>;
+    updateReservation: (id: string, input: ReservationInput) => Promise<Reservation | null>;
 }
 ```
 
@@ -40,39 +40,48 @@ code (business rules) depends on an abstraction, not a concrete implementation.
 
 ```ts
 // src/adapters/db/makeInMemoryDb.ts
-type InMemoryDbCfg = { logger: Logger; generateId: () => string; };
+type InMemoryDbCfg = { logger: Logger; generateId: () => string };
 
 const makeInMemoryDb = ({ logger, generateId }: InMemoryDbCfg): DB => {
-  const store: Reservation[] = [];
+    const store: Reservation[] = [];
 
-  const saveReservation = async (input: ReservationInput): Promise<Reservation> => {
-    const reservation: Reservation = { id: generateId(), ...input };
-    store.push(reservation);
-    return reservation;
-  };
+    const saveReservation = async (input: ReservationInput): Promise<Reservation> => {
+        const reservation: Reservation = { id: generateId(), ...input };
+        store.push(reservation);
+        return reservation;
+    };
 
-  const getReservations = async (): Promise<Reservation[]> => [...store];
+    const getReservations = async (): Promise<Reservation[]> => [...store];
 
-  const cancelReservation = async (id: string): Promise<boolean> => {
-    const index = store.findIndex(r => r.id === id);
-    if (index === -1) return false;
-    store.splice(index, 1);
-    return true;
-  };
+    const cancelReservation = async (id: string): Promise<boolean> => {
+        const index = store.findIndex((r) => r.id === id);
+        if (index === -1) return false;
+        store.splice(index, 1);
+        return true;
+    };
 
-  const updateReservation = async (id: string, input: ReservationInput): Promise<Reservation | null> => {
-    const index = store.findIndex(r => r.id === id);
-    if (index === -1) return null;
-    const updated: Reservation = { id, ...input };
-    store[index] = updated;
-    return updated;
-  };
+    const updateReservation = async (
+        id: string,
+        input: ReservationInput,
+    ): Promise<Reservation | null> => {
+        const index = store.findIndex((r) => r.id === id);
+        if (index === -1) return null;
+        const updated: Reservation = { id, ...input };
+        store[index] = updated;
+        return updated;
+    };
 
-  return { saveReservation, getReservations, cancelReservation, updateReservation };
+    return {
+        saveReservation,
+        getReservations,
+        cancelReservation,
+        updateReservation,
+    };
 };
 ```
 
 Key things to notice:
+
 - `saveReservation` generates a UUID and returns the full `Reservation` (with `id`).
   The caller (business logic) gets back the saved record — useful for responses.
 - `[...store]` in `getReservations` returns a **copy** of the array. Callers can't
@@ -88,48 +97,57 @@ Key things to notice:
 ```ts
 // src/adapters/db/makeDynamoDb.ts
 type DynamoDbCfg = {
-  tableName:  string;
-  client:     DynamoDBDocumentClient;  // constructed and injected by server/index.ts
-  logger:     Logger;
-  generateId: () => string;
+    tableName: string;
+    client: DynamoDBDocumentClient; // constructed and injected by server/index.ts
+    logger: Logger;
+    generateId: () => string;
 };
 
 const makeDynamoDb = ({ tableName, client, logger, generateId }: DynamoDbCfg): DB => {
-  const saveReservation = async (input: ReservationInput): Promise<Reservation> => {
-    const reservation: Reservation = { id: generateId(), ...input };
-    await client.send(new PutCommand({ TableName: tableName, Item: reservation }));
-    return reservation;
-  };
+    const saveReservation = async (input: ReservationInput): Promise<Reservation> => {
+        const reservation: Reservation = { id: generateId(), ...input };
+        await client.send(new PutCommand({ TableName: tableName, Item: reservation }));
+        return reservation;
+    };
 
-  const getReservations = async (): Promise<Reservation[]> => {
-    const result = await client.send(new ScanCommand({ TableName: tableName }));
-    return (result.Items ?? []).map(item => ({
-      id:       item.id       as string,
-      quantity: item.quantity as number,
-      date:     item.date     as string,
-    }));
-  };
+    const getReservations = async (): Promise<Reservation[]> => {
+        const result = await client.send(new ScanCommand({ TableName: tableName }));
+        return (result.Items ?? []).map((item) => ({
+            id: item.id as string,
+            quantity: item.quantity as number,
+            date: item.date as string,
+        }));
+    };
 
-  const cancelReservation = async (id: string): Promise<boolean> => {
-    const existing = await client.send(new GetCommand({ TableName: tableName, Key: { id } }));
-    if (!existing.Item) return false;
-    await client.send(new DeleteCommand({ TableName: tableName, Key: { id } }));
-    return true;
-  };
+    const cancelReservation = async (id: string): Promise<boolean> => {
+        const existing = await client.send(new GetCommand({ TableName: tableName, Key: { id } }));
+        if (!existing.Item) return false;
+        await client.send(new DeleteCommand({ TableName: tableName, Key: { id } }));
+        return true;
+    };
 
-  const updateReservation = async (id: string, input: ReservationInput): Promise<Reservation | null> => {
-    const existing = await client.send(new GetCommand({ TableName: tableName, Key: { id } }));
-    if (!existing.Item) return null;
-    const updated: Reservation = { id, ...input };
-    await client.send(new PutCommand({ TableName: tableName, Item: updated }));
-    return updated;
-  };
+    const updateReservation = async (
+        id: string,
+        input: ReservationInput,
+    ): Promise<Reservation | null> => {
+        const existing = await client.send(new GetCommand({ TableName: tableName, Key: { id } }));
+        if (!existing.Item) return null;
+        const updated: Reservation = { id, ...input };
+        await client.send(new PutCommand({ TableName: tableName, Item: updated }));
+        return updated;
+    };
 
-  return { saveReservation, getReservations, cancelReservation, updateReservation };
+    return {
+        saveReservation,
+        getReservations,
+        cancelReservation,
+        updateReservation,
+    };
 };
 ```
 
 Key things to notice:
+
 - `DynamoDBDocumentClient` (from `@aws-sdk/lib-dynamodb`) handles marshalling
   automatically — you send plain JS objects and get plain JS objects back. The
   lower-level `DynamoDBClient` works with DynamoDB's wire format (`{ S: "hello" }`
@@ -151,6 +169,7 @@ If the `DB` interface were synchronous, you'd have to change `reserve` and every
 test when you add a real database.
 
 By making the interface async from the start:
+
 - `reserve` uses `await db.saveReservation(...)` — works with any implementation.
 - Tests use stub objects with `async () => {}` — no extra mocking needed.
 - Swapping implementations requires zero changes to business logic.
@@ -164,19 +183,32 @@ implementation to create, then passes it to the composition root:
 
 ```ts
 // src/server/index.ts  — all infrastructure decisions live here
-const logger  = makeConsoleLogger();
+const logger = makeConsoleLogger();
 const metrics = makeNoOpMetrics();
 
 const db: DB = (() => {
-  if (!process.env.DYNAMODB_TABLE) return makeInMemoryDb({ logger, generateId: randomUUID });
-  const region   = process.env.AWS_REGION ?? "us-east-1";
-  const endpoint = process.env.DYNAMODB_ENDPOINT;
-  const raw      = new DynamoDBClient({ region, ...(endpoint ? { endpoint } : {}) });
-  const client   = DynamoDBDocumentClient.from(raw);
-  return makeDynamoDb({ tableName: process.env.DYNAMODB_TABLE, client, logger, generateId: randomUUID });
+    if (!process.env.DYNAMODB_TABLE) return makeInMemoryDb({ logger, generateId: randomUUID });
+    const region = process.env.AWS_REGION ?? "us-east-1";
+    const endpoint = process.env.DYNAMODB_ENDPOINT;
+    const raw = new DynamoDBClient({
+        region,
+        ...(endpoint ? { endpoint } : {}),
+    });
+    const client = DynamoDBDocumentClient.from(raw);
+    return makeDynamoDb({
+        tableName: process.env.DYNAMODB_TABLE,
+        client,
+        logger,
+        generateId: randomUUID,
+    });
 })();
 
-const { restaurant } = makeServerApp({ restaurantCfg: { tableSize }, logger, metrics, db });
+const { restaurant } = makeServerApp({
+    restaurantCfg: { tableSize },
+    logger,
+    metrics,
+    db,
+});
 ```
 
 `server/compose.ts` receives whatever db it is given — it has no defaults
@@ -232,6 +264,7 @@ npm run server:dynamo
 ```
 
 This is equivalent to:
+
 ```bash
 DYNAMODB_TABLE=reservations DYNAMODB_ENDPOINT=http://localhost:4566 node src/server/index.ts
 ```
@@ -264,14 +297,14 @@ interface:
 ```ts
 // In reserve.test.ts
 const stubDb: DB = {
-  saveReservation:   async (input) => ({ id: "stub-id", ...input }),
-  getReservations:   async () => [],
-  cancelReservation: async () => true,
-  updateReservation: async () => null,
+    saveReservation: async (input) => ({ id: "stub-id", ...input }),
+    getReservations: async () => [],
+    cancelReservation: async () => true,
+    updateReservation: async () => null,
 };
 ```
 
-Because `makeReserve` depends on the `DB` *interface*, not on `makeInMemoryDb` or
+Because `makeReserve` depends on the `DB` _interface_, not on `makeInMemoryDb` or
 `makeDynamoDb` directly, the test can supply any object that has the right shape.
 This is why the tests are fast (no I/O) and reliable (no network).
 
@@ -286,12 +319,12 @@ but are outside the scope of this learning project.
 
 ## Summary
 
-| Layer         | File                        | What it does                              |
-|---------------|-----------------------------|-------------------------------------------|
-| Interface     | `src/core/domain/restaurant/types.ts` | Defines what a DB must be able to do (domain port) |
-| In-memory impl | `makeInMemoryDb.ts`        | Fast, no deps — used in tests and by default |
-| DynamoDB impl | `makeDynamoDb.ts`           | Real AWS storage via DocumentClient       |
-| Wiring        | `src/server/compose.ts`     | Wires domain operations together          |
-| Entry point   | `src/server/index.ts`       | Reads env vars, creates db, calls compose |
-| Local infra   | `docker-compose.yml`        | LocalStack container                      |
-| Table setup   | `scripts/setup-local.sh`    | Creates the `reservations` table          |
+| Layer          | File                                  | What it does                                       |
+| -------------- | ------------------------------------- | -------------------------------------------------- |
+| Interface      | `src/core/domain/restaurant/types.ts` | Defines what a DB must be able to do (domain port) |
+| In-memory impl | `makeInMemoryDb.ts`                   | Fast, no deps — used in tests and by default       |
+| DynamoDB impl  | `makeDynamoDb.ts`                     | Real AWS storage via DocumentClient                |
+| Wiring         | `src/server/compose.ts`               | Wires domain operations together                   |
+| Entry point    | `src/server/index.ts`                 | Reads env vars, creates db, calls compose          |
+| Local infra    | `docker-compose.yml`                  | LocalStack container                               |
+| Table setup    | `scripts/setup-local.sh`              | Creates the `reservations` table                   |

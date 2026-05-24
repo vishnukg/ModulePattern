@@ -1,13 +1,10 @@
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
+import prettier from "eslint-config-prettier";
 
-export default tseslint.config(
-  js.configs.recommended,
-  tseslint.configs.recommended,
-  {
+export default tseslint.config(js.configs.recommended, tseslint.configs.recommended, prettier, {
     rules: {
-      // container.ts uses `as any` intentionally — internal cast, public types stay correct
-      "@typescript-eslint/no-explicit-any": "off",
+        // container.ts uses `as any` intentionally — internal cast, public types stay correct
+        "@typescript-eslint/no-explicit-any": "off",
     },
-  },
-);
+});

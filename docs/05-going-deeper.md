@@ -12,15 +12,15 @@ This is one of the most common sources of bugs in class-based code.
 
 ```ts
 class ReservationService {
-  private tableSize: number;
+    private tableSize: number;
 
-  constructor(tableSize: number) {
-    this.tableSize = tableSize;
-  }
+    constructor(tableSize: number) {
+        this.tableSize = tableSize;
+    }
 
-  reserve(quantity: number) {
-    return quantity <= this.tableSize ? "Accepted" : "Rejected";
-  }
+    reserve(quantity: number) {
+        return quantity <= this.tableSize ? "Accepted" : "Rejected";
+    }
 }
 
 const service = new ReservationService(10);
@@ -32,38 +32,43 @@ The moment you separate the method from the object, `this` is lost:
 ```ts
 const reserve = service.reserve;
 reserve(8); // TypeError: Cannot read properties of undefined (reading 'tableSize')
-            // this = undefined in strict mode
+// this = undefined in strict mode
 ```
 
 This is not a contrived example. It happens constantly in real code:
 
 ```ts
-setTimeout(service.reserve, 1000);   // this is lost
-[8, 12, 15].map(service.reserve);    // this is lost
+setTimeout(service.reserve, 1000); // this is lost
+[8, 12, 15].map(service.reserve); // this is lost
 const { reserve } = service;
-reserve(8);                          // this is lost
+reserve(8); // this is lost
 ```
 
 #### The common fixes — all workarounds
 
 **`.bind()`**
+
 ```ts
 const reserve = service.reserve.bind(service);
 reserve(8); // works — but you must remember to call .bind() everywhere
 ```
 
 **Arrow function class field** — captures `this` at construction time:
+
 ```ts
 class ReservationService {
-  reserve = (quantity: number) => { // arrow, not a method
-    return quantity <= this.tableSize ? "Accepted" : "Rejected";
-  };
+    reserve = (quantity: number) => {
+        // arrow, not a method
+        return quantity <= this.tableSize ? "Accepted" : "Rejected";
+    };
 }
 ```
+
 Works, but creates a new function object per instance instead of sharing
 one on the prototype — costs more memory at scale.
 
 **Wrapper at the call site:**
+
 ```ts
 setTimeout(() => service.reserve(8), 1000); // works but adds noise everywhere
 ```
@@ -80,10 +85,10 @@ The function is a standalone value that carries everything it needs.
 const { reserve } = restaurant;
 
 await reserve({ quantity: 8, date: "2024-12-12" }); // ✓
-setTimeout(reserve, 1000);                           // ✓
-[r1, r2, r3].map(reserve);                          // ✓
+setTimeout(reserve, 1000); // ✓
+[r1, r2, r3].map(reserve); // ✓
 const fn = reserve;
-await fn({ quantity: 8, date: "2024-12-12" });       // ✓
+await fn({ quantity: 8, date: "2024-12-12" }); // ✓
 ```
 
 Every one of these works because `reserve` does not need any surrounding
@@ -150,7 +155,7 @@ src/core/ports/metrics.ts             ← Metrics, FakeMetrics interfaces
 ```
 
 `domain/restaurant/types.ts` owns the `DB` interface because the domain defines
-what a database *must* be able to do — it's a port the domain controls.
+what a database _must_ be able to do — it's a port the domain controls.
 Adapters (`adapters/db/`) import from `domain/restaurant/types.ts` to satisfy it.
 
 `Logger` and `Metrics` live in `ports/` rather than in `domain/restaurant/types.ts`
@@ -175,8 +180,8 @@ export * from "./ports/index.ts";
 Callers import everything by name from one place — internal file structure is hidden:
 
 ```ts
-import { makeReserve, makeCancel }      from "../core/index.ts";
-import type { DB, Logger, Metrics }     from "../core/index.ts";
+import { makeReserve, makeCancel } from "../core/index.ts";
+import type { DB, Logger, Metrics } from "../core/index.ts";
 ```
 
 #### Layers never import across boundaries
@@ -222,8 +227,8 @@ references, not its data.
 ```ts
 const address = { city: "London", postcode: "SW1A" }; // lives somewhere in memory
 
-const user = { name: "Alice", address };  // address field = 8-byte pointer
-                                          // NOT a copy of the address object
+const user = { name: "Alice", address }; // address field = 8-byte pointer
+// NOT a copy of the address object
 
 const updatedUser = { ...user, name: "Bob" };
 // updatedUser.address === user.address  ← same reference
@@ -253,6 +258,7 @@ const v2 = { ...v1, c: differentObject };
 #### When immutability does cost something
 
 **Hot loops** — creating new arrays on every iteration of a tight loop:
+
 ```ts
 // expensive — new array every iteration
 const result = items.reduce((acc, x) => [...acc, transform(x)], []);
@@ -263,10 +269,11 @@ const result = items.map(transform);
 
 **Deeply nested objects** — updating a value deep in a nested structure
 requires copying every level on the path:
+
 ```ts
 const updated = {
-  ...state,
-  deep: { ...state.deep, nested: { ...state.deep.nested, value: newValue } },
+    ...state,
+    deep: { ...state.deep, nested: { ...state.deep.nested, value: newValue } },
 };
 ```
 
