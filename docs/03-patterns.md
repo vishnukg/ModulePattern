@@ -99,7 +99,16 @@ const makeServerApp = ({ restaurantCfg, logger, metrics, db }: ServerAppCfg) => 
 // src/cli/compose.ts
 const makeCliApp = ({ restaurantCfg, logger, metrics, db }: CliAppCfg) => {
     const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
-    return { reserve };
+    const cancel = makeCancel({ db, logger, metrics });
+    const update = makeUpdate({ db, logger, metrics, restaurantCfg });
+    const restaurant = makeRestaurant({
+        reserve,
+        cancel,
+        update,
+        getReservations: db.getReservations,
+    });
+
+    return { restaurant };
 };
 ```
 

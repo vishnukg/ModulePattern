@@ -186,3 +186,85 @@ interface FakeMetrics extends Metrics {
 `makeFakeMetrics` (in `tests/helpers/fakeMetrics.ts`) returns a `FakeMetrics`.
 The production code receives it typed as `Metrics` — it has no idea the
 test double is storing counters internally.
+
+---
+
+## 8. Object literal shorthand and destructuring
+
+JavaScript has shorthand syntax for creating objects when the property name
+is the same as the variable name.
+
+```ts
+const restaurant = makeRestaurant({
+    reserve,
+    cancel,
+    update,
+    getReservations: db.getReservations,
+});
+
+return { restaurant };
+```
+
+This:
+
+```ts
+return { restaurant };
+```
+
+is the same as writing:
+
+```ts
+return {
+    restaurant: restaurant,
+};
+```
+
+The first `restaurant` is the object property name. The second `restaurant`
+is the variable value being assigned to that property.
+
+The caller can then use **object destructuring**:
+
+```ts
+const { restaurant } = makeCliApp({
+    restaurantCfg: { tableSize: seats },
+    logger,
+    metrics,
+    db,
+});
+```
+
+That is shorthand for:
+
+```ts
+const app = makeCliApp({
+    restaurantCfg: { tableSize: seats },
+    logger,
+    metrics,
+    db,
+});
+
+const restaurant = app.restaurant;
+```
+
+This pattern appears in the composition roots:
+
+```ts
+// src/cli/compose.ts
+return { restaurant };
+
+// src/cli/index.ts
+const { restaurant } = makeCliApp(...);
+```
+
+The outer object lets a composition function return named app capabilities.
+Today it returns only `restaurant`, but later it could return more:
+
+```ts
+return {
+    restaurant,
+    shutdown,
+    healthCheck,
+};
+```
+
+Then each entry point can destructure only what it needs.
