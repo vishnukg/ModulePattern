@@ -35,6 +35,10 @@ const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
 `makeReserve` does not import `db` — it receives it as a parameter. This is
 **Functional Dependency Injection**: dependencies are arguments, not imports.
 
+For the full name, history, FP connections (partial application, Reader monad),
+and known trade-offs of this pattern, see
+[10-factory-function-pattern.md](./10-factory-function-pattern.md).
+
 ---
 
 ## 2. Barrel files — each module's public API
