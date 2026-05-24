@@ -1,4 +1,8 @@
-import type { ReservationInput, UpdateCfg } from "./types.ts";
+import type { ReservationInput, DB, RestaurantCfg } from "./types.ts";
+import type { Logger }                               from "../logger/types.ts";
+import type { Metrics }                              from "../metrics/types.ts";
+
+type UpdateCfg = { db: DB; restaurantCfg: RestaurantCfg; logger: Logger; metrics: Metrics; };
 
 const makeUpdate = ({ db, restaurantCfg, logger, metrics }: UpdateCfg) => {
   const update = async (id: string, input: ReservationInput): Promise<"Updated" | "Rejected" | "NotFound"> => {

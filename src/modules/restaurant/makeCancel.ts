@@ -1,4 +1,8 @@
-import type { CancelCfg } from "./types.ts";
+import type { DB }     from "./types.ts";
+import type { Logger } from "../logger/types.ts";
+import type { Metrics } from "../metrics/types.ts";
+
+type CancelCfg = { db: DB; logger: Logger; metrics: Metrics; };
 
 const makeCancel = ({ db, logger, metrics }: CancelCfg) => {
   const cancel = async (id: string): Promise<"Cancelled" | "NotFound"> => {

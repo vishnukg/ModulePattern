@@ -1,5 +1,7 @@
-import type { DB, Reservation, ReservationInput }  from "../restaurant/types.ts";
-import type { InMemoryDbCfg }                       from "./types.ts";
+import type { DB, Reservation, ReservationInput } from "../restaurant/types.ts";
+import type { Logger }                            from "../logger/types.ts";
+
+type InMemoryDbCfg = { logger: Logger; generateId: () => string; };
 
 const makeInMemoryDb = ({ logger, generateId }: InMemoryDbCfg): DB => {
   const store: Reservation[] = [];

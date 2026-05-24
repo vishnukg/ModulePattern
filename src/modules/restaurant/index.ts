@@ -1,7 +1,7 @@
-export { default as makeReserve }     from "./reserve.ts";
-export { default as makeCancel }      from "./makeCancel.ts";
-export { default as makeUpdate }      from "./makeUpdate.ts";
-export { default as makeRestaurant }  from "./makeRestaurant.ts";
+export { default as makeReserve }    from "./reserve.ts";
+export { default as makeCancel }     from "./makeCancel.ts";
+export { default as makeUpdate }     from "./makeUpdate.ts";
+export { default as makeRestaurant } from "./makeRestaurant.ts";
 export type {
   Reservation,
   ReservationInput,
@@ -12,8 +12,4 @@ export type {
   CancelFn,
   UpdateFn,
   GetReservationsFn,
-  ReserveCfg,
-  CancelCfg,
-  UpdateCfg,
-  MakeRestaurantCfg,
 } from "./types.ts";

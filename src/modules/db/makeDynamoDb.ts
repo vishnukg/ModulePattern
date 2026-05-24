@@ -1,6 +1,14 @@
 import { PutCommand, ScanCommand, GetCommand, DeleteCommand } from "@aws-sdk/lib-dynamodb";
+import type { DynamoDBDocumentClient }                        from "@aws-sdk/lib-dynamodb";
 import type { DB, Reservation, ReservationInput }            from "../restaurant/types.ts";
-import type { DynamoDbCfg }                                  from "./types.ts";
+import type { Logger }                                        from "../logger/types.ts";
+
+type DynamoDbCfg = {
+  tableName:  string;
+  client:     DynamoDBDocumentClient;
+  logger:     Logger;
+  generateId: () => string;
+};
 
 const makeDynamoDb = ({ tableName, client, logger, generateId }: DynamoDbCfg): DB => {
   const saveReservation = async (input: ReservationInput): Promise<Reservation> => {
