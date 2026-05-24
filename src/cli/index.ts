@@ -1,8 +1,7 @@
 import { parseArgs }            from "node:util";
 import { randomUUID }           from "node:crypto";
 import makeCliApp               from "./compose.ts";
-import { makeConsoleLogger }    from "../modules/logger/index.ts";
-import { makeNoOpMetrics }      from "../modules/metrics/index.ts";
+import { makeConsoleLogger, makeNoOpMetrics } from "../modules/shared/index.ts";
 import { makeInMemoryDb }       from "../modules/db/index.ts";
 
 const { values } = parseArgs({

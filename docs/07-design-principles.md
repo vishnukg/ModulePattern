@@ -300,8 +300,8 @@ Infrastructure decisions (which logger? which db?) live in the entry points:
 // src/server/index.ts
 const logger = makeConsoleLogger();
 const db     = process.env.DYNAMODB_TABLE
-  ? makeDynamoDb({ tableName: process.env.DYNAMODB_TABLE, ... })
-  : makeInMemoryDb({ logger });
+  ? makeDynamoDb({ tableName: process.env.DYNAMODB_TABLE, client, logger, generateId: randomUUID })
+  : makeInMemoryDb({ logger, generateId: randomUUID });
 
 const { restaurant } = makeServerApp({ restaurantCfg: { tableSize }, logger, metrics, db });
 ```

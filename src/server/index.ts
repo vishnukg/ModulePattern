@@ -3,8 +3,7 @@ import { DynamoDBClient }                            from "@aws-sdk/client-dynam
 import { DynamoDBDocumentClient }                    from "@aws-sdk/lib-dynamodb";
 import { randomUUID }                                from "node:crypto";
 import makeServerApp                                 from "./compose.ts";
-import { makeConsoleLogger }                         from "../modules/logger/index.ts";
-import { makeNoOpMetrics }                           from "../modules/metrics/index.ts";
+import { makeConsoleLogger, makeNoOpMetrics }         from "../modules/shared/index.ts";
 import { makeInMemoryDb, makeDynamoDb }              from "../modules/db/index.ts";
 import { makeRestaurantRouter }                      from "../modules/http/index.ts";
 import type { DB }                                   from "../modules/restaurant/index.ts";

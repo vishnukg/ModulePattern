@@ -118,7 +118,3 @@ setting. It makes the TypeScript configuration accurately describe how the
 project actually runs. If you later switch to `tsx` or Vite, the right move is
 to switch to `"bundler"` — not `"nodenext"` — because those tools handle
 resolution themselves and don't follow Node's strict rules.
-
-If this project were ever refactored to run as native Node.js ESM without tsx
-(e.g. compiling to `.js` with `tsc` and running `node server.js`), the correct
-setting would switch back to `"nodenext"`.

@@ -1,8 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import makeCancel from "../src/modules/restaurant/makeCancel.ts";
 import type { DB }      from "../src/modules/restaurant/types.ts";
-import type { Logger }  from "../src/modules/logger/types.ts";
-import type { Metrics } from "../src/modules/metrics/types.ts";
+import type { Logger, Metrics } from "../src/modules/shared/index.ts";
 
 const stubDb: DB = {
   saveReservation:   async (input) => ({ id: "stub-id", ...input }),

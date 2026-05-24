@@ -112,18 +112,18 @@ src/modules/restaurant/
 src/modules/db/
   makeInMemoryDb.ts
   makeDynamoDb.ts
-  types.ts          ← InMemoryDbCfg, DynamoDbCfg
   index.ts
 
-src/modules/logger/
-  consoleLogger.ts
-  types.ts          ← Logger interface
-  index.ts
-
-src/modules/metrics/
-  makeNoOpMetrics.ts
-  types.ts          ← Metrics, FakeMetrics interfaces
-  index.ts
+src/modules/shared/           ← cross-cutting: used by domain and adapters alike
+  logger/
+    consoleLogger.ts
+    types.ts          ← Logger interface
+    index.ts
+  metrics/
+    makeNoOpMetrics.ts
+    types.ts          ← Metrics, FakeMetrics interfaces
+    index.ts
+  index.ts            ← barrel for all shared exports
 ```
 
 If you want to find `makeCancel`, open `makeCancel.ts`. Never any ambiguity.
@@ -141,15 +141,22 @@ tests/helpers/
 Types live in a `types.ts` file next to the code that owns them.
 
 ```
-src/modules/restaurant/types.ts  ← Reservation, DB, all restaurant types
-src/modules/logger/types.ts      ← Logger interface
-src/modules/metrics/types.ts     ← Metrics, FakeMetrics interfaces
-src/modules/db/types.ts          ← InMemoryDbCfg, DynamoDbCfg (infra-only types)
+src/modules/restaurant/types.ts      ← Reservation, DB, and all restaurant types
+src/modules/shared/logger/types.ts   ← Logger interface
+src/modules/shared/metrics/types.ts  ← Metrics, FakeMetrics interfaces
 ```
 
 `restaurant/types.ts` owns the `DB` interface because the domain defines
 what a database *must* be able to do — it's a port the domain controls.
 Infrastructure (`db/`) imports from `restaurant/types.ts` to satisfy it.
+
+`Logger` and `Metrics` live in `shared/` rather than in `restaurant/types.ts`
+because they are used by adapters too (e.g. `makeInMemoryDb` logs). They are
+cross-cutting: neither domain-specific nor infrastructure-specific.
+
+Single-use cfg types (`InMemoryDbCfg`, `DynamoDbCfg`, `ServerAppCfg`) are
+defined inline at the top of the file that uses them — no separate types file
+needed when there is only one consumer.
 
 #### Barrel files for controlled public APIs
 
@@ -175,7 +182,7 @@ another module directly.
 ```
           server/compose.ts   cli/compose.ts
               /     |      \         |
-         modules/db  modules/logger  modules/restaurant
+         modules/db  modules/shared  modules/restaurant
 ```
 
 `reserve.ts` does not import `makeInMemoryDb`. It receives `db` as an

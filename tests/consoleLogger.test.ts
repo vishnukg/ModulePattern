@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import makeConsoleLogger from "../src/modules/logger/consoleLogger.ts";
+import { makeConsoleLogger } from "../src/modules/shared/index.ts";
 
 describe("consoleLogger — output channel", () => {
   it("info writes to console.log", () => {

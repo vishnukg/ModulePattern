@@ -13,12 +13,12 @@ The `reserve` function never imports DynamoDB directly. It only knows about the
 
 ```ts
 // src/modules/restaurant/types.ts  ← the domain owns this interface
-export type DB = {
+export interface DB {
   saveReservation:   (input: ReservationInput) => Promise<Reservation>;
   getReservations:   () => Promise<Reservation[]>;
   cancelReservation: (id: string) => Promise<boolean>;
   updateReservation: (id: string, input: ReservationInput) => Promise<Reservation | null>;
-};
+}
 ```
 
 `DB` lives in `restaurant/types.ts` — not in `db/types.ts`. The domain defines
@@ -40,11 +40,13 @@ code (business rules) depends on an abstraction, not a concrete implementation.
 
 ```ts
 // src/modules/db/makeInMemoryDb.ts
-const makeInMemoryDb = ({ logger }: InMemoryDbCfg): DB => {
+type InMemoryDbCfg = { logger: Logger; generateId: () => string; };
+
+const makeInMemoryDb = ({ logger, generateId }: InMemoryDbCfg): DB => {
   const store: Reservation[] = [];
 
   const saveReservation = async (input: ReservationInput): Promise<Reservation> => {
-    const reservation: Reservation = { id: randomUUID(), ...input };
+    const reservation: Reservation = { id: generateId(), ...input };
     store.push(reservation);
     return reservation;
   };
@@ -85,12 +87,16 @@ Key things to notice:
 
 ```ts
 // src/modules/db/makeDynamoDb.ts
-const makeDynamoDb = ({ tableName, region, endpoint, logger }: DynamoDbCfg): DB => {
-  const raw    = new DynamoDBClient({ region, ...(endpoint ? { endpoint } : {}) });
-  const client = DynamoDBDocumentClient.from(raw);
+type DynamoDbCfg = {
+  tableName:  string;
+  client:     DynamoDBDocumentClient;  // constructed and injected by server/index.ts
+  logger:     Logger;
+  generateId: () => string;
+};
 
+const makeDynamoDb = ({ tableName, client, logger, generateId }: DynamoDbCfg): DB => {
   const saveReservation = async (input: ReservationInput): Promise<Reservation> => {
-    const reservation: Reservation = { id: randomUUID(), ...input };
+    const reservation: Reservation = { id: generateId(), ...input };
     await client.send(new PutCommand({ TableName: tableName, Item: reservation }));
     return reservation;
   };
@@ -157,18 +163,18 @@ The server entry point reads environment variables and decides which DB
 implementation to create, then passes it to the composition root:
 
 ```ts
-// src/server/index.ts
+// src/server/index.ts  — all infrastructure decisions live here
 const logger  = makeConsoleLogger();
 const metrics = makeNoOpMetrics();
 
-const db = process.env.DYNAMODB_TABLE
-  ? makeDynamoDb({
-      tableName: process.env.DYNAMODB_TABLE,
-      region:    process.env.AWS_REGION ?? "us-east-1",
-      endpoint:  process.env.DYNAMODB_ENDPOINT,
-      logger,
-    })
-  : makeInMemoryDb({ logger });
+const db: DB = (() => {
+  if (!process.env.DYNAMODB_TABLE) return makeInMemoryDb({ logger, generateId: randomUUID });
+  const region   = process.env.AWS_REGION ?? "us-east-1";
+  const endpoint = process.env.DYNAMODB_ENDPOINT;
+  const raw      = new DynamoDBClient({ region, ...(endpoint ? { endpoint } : {}) });
+  const client   = DynamoDBDocumentClient.from(raw);
+  return makeDynamoDb({ tableName: process.env.DYNAMODB_TABLE, client, logger, generateId: randomUUID });
+})();
 
 const { restaurant } = makeServerApp({ restaurantCfg: { tableSize }, logger, metrics, db });
 ```

@@ -1,5 +1,5 @@
 import type { DB, Reservation, ReservationInput } from "../restaurant/types.ts";
-import type { Logger }                            from "../logger/types.ts";
+import type { Logger }                            from "../shared/index.ts";
 
 type InMemoryDbCfg = { logger: Logger; generateId: () => string; };
 

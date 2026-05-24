@@ -27,14 +27,14 @@ different implementations for production and testing.
 implementations will satisfy the same contract.
 
 ```ts
-// src/modules/logger/types.ts
+// src/modules/shared/logger/types.ts
 export interface Logger {
   info: (message: string, data?: Record<string, unknown>) => void;
   warn: (message: string, data?: Record<string, unknown>) => void;
   error: (message: string, data?: Record<string, unknown>) => void;
 }
 
-// src/modules/metrics/types.ts
+// src/modules/shared/metrics/types.ts
 export interface Metrics {
   increment: (name: string) => void;
   timing: (name: string, durationMs: number) => void;
@@ -58,7 +58,7 @@ inspection methods used in tests.
 
 ## 3. Concrete implementations
 
-**Console logger** — for production (`src/modules/logger/consoleLogger.ts`):
+**Console logger** — for production (`src/modules/shared/logger/consoleLogger.ts`):
 
 ```ts
 export default (): Logger => ({
@@ -153,7 +153,7 @@ composition root. The composition root wires everything together:
 // src/server/index.ts — creates infrastructure
 const logger  = makeConsoleLogger();
 const metrics = makeNoOpMetrics();
-const db      = makeInMemoryDb({ logger }); // or makeDynamoDb
+const db      = makeInMemoryDb({ logger, generateId: randomUUID }); // or makeDynamoDb
 
 // src/server/compose.ts — pure wiring, no defaults
 const makeServerApp = ({ restaurantCfg, logger, metrics, db }: ServerAppCfg) => {

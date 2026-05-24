@@ -1,7 +1,6 @@
 import { makeReserve, makeCancel, makeUpdate, makeRestaurant } from "../modules/restaurant/index.ts";
 import type { RestaurantCfg, DB }                              from "../modules/restaurant/index.ts";
-import type { Logger }                                         from "../modules/logger/index.ts";
-import type { Metrics }                                        from "../modules/metrics/index.ts";
+import type { Logger, Metrics }                                from "../modules/shared/index.ts";
 
 type ServerAppCfg = {
   restaurantCfg: RestaurantCfg;

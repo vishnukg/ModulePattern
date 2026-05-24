@@ -97,8 +97,8 @@ those decisions:
 const logger  = makeConsoleLogger();
 const metrics = makeNoOpMetrics();
 const db      = process.env.DYNAMODB_TABLE
-  ? makeDynamoDb({ tableName: process.env.DYNAMODB_TABLE, ... })
-  : makeInMemoryDb({ logger });
+  ? makeDynamoDb({ tableName: process.env.DYNAMODB_TABLE, client, logger, generateId: randomUUID })
+  : makeInMemoryDb({ logger, generateId: randomUUID });
 
 const { restaurant } = makeServerApp({ restaurantCfg: { tableSize }, logger, metrics, db });
 ```
@@ -164,8 +164,8 @@ a fresh `db` with an empty store.
 
 ```ts
 // Each call creates a fresh in-memory store — tests never interfere
-const { restaurant: r1 } = makeServerApp({ restaurantCfg: { tableSize: 10 }, logger, metrics, db: makeInMemoryDb({ logger }) });
-const { restaurant: r2 } = makeServerApp({ restaurantCfg: { tableSize: 10 }, logger, metrics, db: makeInMemoryDb({ logger }) });
+const { restaurant: r1 } = makeServerApp({ restaurantCfg: { tableSize: 10 }, logger, metrics, db: makeInMemoryDb({ logger, generateId: randomUUID }) });
+const { restaurant: r2 } = makeServerApp({ restaurantCfg: { tableSize: 10 }, logger, metrics, db: makeInMemoryDb({ logger, generateId: randomUUID }) });
 // r1 and r2 are completely isolated
 ```
 
@@ -191,10 +191,10 @@ export const config = { port: 3000, tableSize: 12 };
 This is the **ES module singleton** — a process-wide singleton with no
 container needed.
 
-The reason `makeApp` uses default parameters rather than module-level
-constants for logger/metrics/db is test isolation: if `makeInMemoryDb()`
-were called at module scope it would be shared across all tests in the
-process. Calling it inside `makeApp` means each test call gets a fresh one.
+The reason infrastructure is created inside the entry point (not at module
+scope) is test isolation: if `makeInMemoryDb()` were called at module scope
+it would be shared across all tests in the process. Calling it inside each
+test means each test call gets a fresh, empty store.
 
 #### The `erasableSyntaxOnly` connection
 
