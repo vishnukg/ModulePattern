@@ -1,16 +1,14 @@
-import express from "express";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { randomUUID } from "node:crypto";
-import makeServerApp from "./compose.ts";
+import composeServerApp, { readPort } from "./compose.ts";
 import makeConsoleLogger from "../adapters/logger/consoleLogger.ts";
 import makeNoOpMetrics from "../adapters/metrics/makeNoOpMetrics.ts";
 import makeInMemoryDb from "../adapters/db/makeInMemoryDb.ts";
 import makeDynamoDb from "../adapters/db/makeDynamoDb.ts";
-import makeRestaurantRouter from "../adapters/http/makeRestaurantRouter.ts";
 import type { DB } from "../core/index.ts";
 
-const port = Number(process.env.PORT ?? 3000);
+const port = readPort(process.env.PORT, 3000);
 const tableSize = Number(process.env.TABLE_SIZE ?? 10);
 
 const logger = makeConsoleLogger();
@@ -33,24 +31,10 @@ const db: DB = (() => {
     });
 })();
 
-const { restaurant } = makeServerApp({
-    restaurantCfg: { tableSize },
-    logger,
-    metrics,
-    db,
-});
-const restaurantRouter = makeRestaurantRouter({
-    restaurant,
-    router: express.Router(),
-});
-
-const app = express();
-app.use(express.json());
-app.use("/api", restaurantRouter);
-
-app.listen(port, () => {
+const { listen } = composeServerApp({ restaurantCfg: { tableSize }, logger, metrics, db, port });
+listen(p => {
     logger.info("server started", {
-        port,
+        port: p,
         tableSize,
         db: process.env.DYNAMODB_TABLE ?? "in-memory",
     });

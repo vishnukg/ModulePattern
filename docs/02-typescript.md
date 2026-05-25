@@ -225,7 +225,7 @@ is the variable value being assigned to that property.
 The caller can then use **object destructuring**:
 
 ```ts
-const { restaurant } = makeCliApp({
+const { run } = composeCliApp({
     restaurantCfg: { tableSize: seats },
     logger,
     metrics,
@@ -236,35 +236,38 @@ const { restaurant } = makeCliApp({
 That is shorthand for:
 
 ```ts
-const app = makeCliApp({
+const app = composeCliApp({
     restaurantCfg: { tableSize: seats },
     logger,
     metrics,
     db,
 });
 
-const restaurant = app.restaurant;
+const run = app.run;
 ```
 
 This pattern appears in the composition roots:
 
 ```ts
 // src/cli/compose.ts
-return { restaurant };
+return { run };
 
 // src/cli/index.ts
-const { restaurant } = makeCliApp(...);
+const { run } = composeCliApp(...);
 ```
 
-The outer object lets a composition function return named app capabilities.
-Today it returns only `restaurant`, but later it could return more:
+The outer object lets a composition function return named app capabilities —
+each caller destructures only the peers it needs:
 
 ```ts
-return {
-    restaurant,
-    shutdown,
-    healthCheck,
-};
-```
+// src/server/compose.ts
+return { listen, restaurant };
 
-Then each entry point can destructure only what it needs.
+// entry point only needs listen
+const { listen } = composeServerApp(...);
+listen();
+
+// a test only needs restaurant
+const { restaurant } = composeServerApp(...);
+await restaurant.reserve({ quantity: 2, date: "2024-12-01" });
+```

@@ -203,12 +203,8 @@ const db: DB = (() => {
     });
 })();
 
-const { restaurant } = makeServerApp({
-    restaurantCfg: { tableSize },
-    logger,
-    metrics,
-    db,
-});
+const { listen } = composeServerApp({ restaurantCfg: { tableSize }, logger, metrics, db, port });
+listen();
 ```
 
 `server/compose.ts` receives whatever db it is given — it has no defaults
@@ -216,7 +212,7 @@ and no knowledge of environment variables:
 
 ```ts
 // src/server/compose.ts
-const makeServerApp = ({ restaurantCfg, logger, metrics, db }: ServerAppCfg) => {
+const composeServerApp = ({ restaurantCfg, logger, metrics, db, port = 3000 }: ServerAppCfg) => {
   const reserve    = makeReserve({ db, logger, metrics, restaurantCfg });
   ...
 };

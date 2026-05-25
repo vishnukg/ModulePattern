@@ -84,7 +84,7 @@ domain operations together for that specific context.
 
 ```ts
 // src/server/compose.ts
-const makeServerApp = ({ restaurantCfg, logger, metrics, db }: ServerAppCfg) => {
+const composeServerApp = ({ restaurantCfg, logger, metrics, db, port = 3000 }: ServerAppCfg) => {
     const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
     const cancel = makeCancel({ db, logger, metrics });
     const update = makeUpdate({ db, logger, metrics, restaurantCfg });
@@ -94,14 +94,22 @@ const makeServerApp = ({ restaurantCfg, logger, metrics, db }: ServerAppCfg) => 
         update,
         getReservations: db.getReservations,
     });
+    const router = makeRestaurantRouter({ restaurant });
 
-    return { restaurant };
+    const listen = () => {
+        const app = express();
+        app.use(express.json());
+        app.use("/api", router);
+        app.listen(port, () => logger.info("server started", { port }));
+    };
+
+    return { listen, restaurant };
 };
 ```
 
 ```ts
 // src/cli/compose.ts
-const makeCliApp = ({ restaurantCfg, logger, metrics, db }: CliAppCfg) => {
+const composeCliApp = ({ restaurantCfg, logger, metrics, db }: CliAppCfg) => {
     const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
     const cancel = makeCancel({ db, logger, metrics });
     const update = makeUpdate({ db, logger, metrics, restaurantCfg });
@@ -112,13 +120,13 @@ const makeCliApp = ({ restaurantCfg, logger, metrics, db }: CliAppCfg) => {
         getReservations: db.getReservations,
     });
 
-    return { restaurant };
+    return { run: restaurant.reserve };
 };
 ```
 
-Compose functions take all deps as **required parameters** — no defaults,
-no infrastructure decisions inside them. The entry point (`index.ts`) owns
-those decisions:
+`compose*` functions return a **named bag of independent peers** — the things
+the entry point needs to drive the app. The entry point (`index.ts`) owns all
+infrastructure decisions and calls exactly the peers it needs:
 
 ```ts
 // src/server/index.ts  — infrastructure decisions live here
@@ -133,12 +141,8 @@ const db = process.env.DYNAMODB_TABLE
       })
     : makeInMemoryDb({ logger, generateId: randomUUID });
 
-const { restaurant } = makeServerApp({
-    restaurantCfg: { tableSize },
-    logger,
-    metrics,
-    db,
-});
+const { listen } = composeServerApp({ restaurantCfg: { tableSize }, logger, metrics, db, port });
+listen();
 ```
 
 This keeps infrastructure decisions (which logger? which db?) at the outermost
@@ -203,20 +207,20 @@ Each test creates exactly what it needs, nothing more.
 
 In each compose function, every `make*` call runs exactly once — every
 service is a **singleton within a single compose call**. Two calls to
-`makeServerApp()` produce two fully independent sets of services.
+`composeServerApp()` produce two fully independent sets of services.
 
 This is important for tests: each test that wires modules directly gets
 a fresh `db` with an empty store.
 
 ```ts
 // Each call creates a fresh in-memory store — tests never interfere
-const { restaurant: r1 } = makeServerApp({
+const { restaurant: r1 } = composeServerApp({
     restaurantCfg: { tableSize: 10 },
     logger,
     metrics,
     db: makeInMemoryDb({ logger, generateId: randomUUID }),
 });
-const { restaurant: r2 } = makeServerApp({
+const { restaurant: r2 } = composeServerApp({
     restaurantCfg: { tableSize: 10 },
     logger,
     metrics,

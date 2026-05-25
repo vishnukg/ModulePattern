@@ -292,7 +292,7 @@ infrastructure decisions inside them:
 
 ```ts
 // src/server/compose.ts
-const makeServerApp = ({ restaurantCfg, logger, metrics, db }: ServerAppCfg) => {
+const composeServerApp = ({ restaurantCfg, logger, metrics, db, port = 3000 }: ServerAppCfg) => {
     const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
     const cancel = makeCancel({ db, logger, metrics });
     const update = makeUpdate({ db, logger, metrics, restaurantCfg });
@@ -302,7 +302,16 @@ const makeServerApp = ({ restaurantCfg, logger, metrics, db }: ServerAppCfg) => 
         update,
         getReservations: db.getReservations,
     });
-    return { restaurant };
+    const router = makeRestaurantRouter({ restaurant });
+
+    const listen = () => {
+        const app = express();
+        app.use(express.json());
+        app.use("/api", router);
+        app.listen(port, () => logger.info("server started", { port }));
+    };
+
+    return { listen, restaurant };
 };
 ```
 
@@ -320,12 +329,8 @@ const db = process.env.DYNAMODB_TABLE
       })
     : makeInMemoryDb({ logger, generateId: randomUUID });
 
-const { restaurant } = makeServerApp({
-    restaurantCfg: { tableSize },
-    logger,
-    metrics,
-    db,
-});
+const { listen } = composeServerApp({ restaurantCfg: { tableSize }, logger, metrics, db, port });
+listen();
 ```
 
 `reserve.ts` never calls `makeConsoleLogger()` — it receives a logger.

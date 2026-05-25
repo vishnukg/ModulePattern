@@ -8,7 +8,7 @@ type CliAppCfg = {
     db: DB;
 };
 
-const makeCliApp = ({ restaurantCfg, logger, metrics, db }: CliAppCfg) => {
+const composeCliApp = ({ restaurantCfg, logger, metrics, db }: CliAppCfg) => {
     const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
     const cancel = makeCancel({ db, logger, metrics });
     const update = makeUpdate({ db, logger, metrics, restaurantCfg });
@@ -19,7 +19,7 @@ const makeCliApp = ({ restaurantCfg, logger, metrics, db }: CliAppCfg) => {
         getReservations: db.getReservations,
     });
 
-    return { restaurant };
+    return { run: restaurant.reserve };
 };
 
-export default makeCliApp;
+export default composeCliApp;

@@ -1,6 +1,6 @@
 import { parseArgs } from "node:util";
 import { randomUUID } from "node:crypto";
-import makeCliApp from "./compose.ts";
+import composeCliApp from "./compose.ts";
 import makeConsoleLogger from "../adapters/logger/consoleLogger.ts";
 import makeNoOpMetrics from "../adapters/metrics/makeNoOpMetrics.ts";
 import makeInMemoryDb from "../adapters/db/makeInMemoryDb.ts";
@@ -26,12 +26,7 @@ const logger = makeConsoleLogger();
 const metrics = makeNoOpMetrics();
 const db = makeInMemoryDb({ logger, generateId: randomUUID });
 
-const { restaurant } = makeCliApp({
-    restaurantCfg: { tableSize: seats },
-    logger,
-    metrics,
-    db,
-});
-const result = await restaurant.reserve({ quantity, date });
+const { run } = composeCliApp({ restaurantCfg: { tableSize: seats }, logger, metrics, db });
+const result = await run({ quantity, date });
 
 console.log(`Reservation ${result} — ${quantity} seat(s) on ${date} (table size: ${seats})`);

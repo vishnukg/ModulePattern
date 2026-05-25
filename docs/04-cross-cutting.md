@@ -161,7 +161,7 @@ const metrics = makeNoOpMetrics();
 const db      = makeInMemoryDb({ logger, generateId: randomUUID }); // or makeDynamoDb
 
 // src/server/compose.ts — pure wiring, no defaults
-const makeServerApp = ({ restaurantCfg, logger, metrics, db }: ServerAppCfg) => {
+const composeServerApp = ({ restaurantCfg, logger, metrics, db, port = 3000 }: ServerAppCfg) => {
   const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
   const cancel  = makeCancel({ db, logger, metrics });
   const update  = makeUpdate({ db, logger, metrics, restaurantCfg });

@@ -1,9 +1,10 @@
-import type { Router } from "express";
+import express from "express";
 import type { Restaurant } from "../../core/index.ts";
 
-type MakeRestaurantRouterCfg = { restaurant: Restaurant; router: Router };
+type MakeRestaurantRouterCfg = { restaurant: Restaurant };
 
-const makeRestaurantRouter = ({ restaurant, router }: MakeRestaurantRouterCfg) => {
+const makeRestaurantRouter = ({ restaurant }: MakeRestaurantRouterCfg) => {
+    const router = express.Router();
     router.post("/reservations", async (req, res) => {
         const { quantity, date } = req.body as {
             quantity: unknown;

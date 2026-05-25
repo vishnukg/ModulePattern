@@ -38,7 +38,7 @@ at runtime, once per request or event.
 
 ```ts
 // Wiring time — called once in compose.ts
-const { reserve } = makeReserve({ db, restaurantCfg, logger, metrics });
+const reserve = makeReserve({ db, restaurantCfg, logger, metrics });
 
 // Runtime — called once per HTTP request
 await reserve({ quantity: 2, date: "2024-12-01" });
@@ -77,7 +77,7 @@ const makeReserve = ({ db, cfg }: ReserveCfg) => {
     const reserve = async (input: ReservationInput) => {
         // db and cfg captured in closure — no this
     };
-    return { reserve };
+    return reserve;
 };
 ```
 
@@ -141,31 +141,60 @@ This project is that idea applied to TypeScript.
 
 ```ts
 // Good — names are visible at the call site
-const { reserve } = makeReserve({ db, restaurantCfg, logger });
+const reserve = makeReserve({ db, restaurantCfg, logger });
 
 // Bad — positional, caller must read the signature to know order
-const { reserve } = makeReserve(db, restaurantCfg, logger);
+const reserve = makeReserve(db, restaurantCfg, logger);
 ```
 
-**Outputs** always use an object literal:
+**Outputs** follow two rules depending on the function type:
+
+`make*` functions return the port directly — the returned value IS the thing
+the caller needs. When the port is a single operation, that is a function;
+when the port is a multi-method interface, that is an object:
 
 ```ts
-// Good — the key names what the factory produced
-return { reserve };
+// Single-operation port — the function IS the port
+const makeReserve = (cfg: ReserveCfg): ReserveFn => {
+    return async (input) => { /* ... */ };
+};
+const reserve = makeReserve({ db, restaurantCfg, logger, metrics });
 
-// Inconsistent — caller cannot destructure
-return reserve;
+// Multi-method port — the object IS the port
+const makeInMemoryDb = (cfg: InMemoryDbCfg): DB => {
+    return { saveReservation, getReservations, cancelReservation, updateReservation };
+};
+const db = makeInMemoryDb({ logger, generateId });
 ```
 
-This means every call site in the project looks the same:
+`compose*` functions return a **named bag of independent peers** — the things
+the entry point will drive:
 
 ```ts
-const { reserve }  = makeReserve({ db, restaurantCfg, logger });
-const { evaluate } = makeGraphEvaluator({ repository });
-const { create }   = makeCreateDocument({ repository, authzClient });
+// compose* always returns a named object
+const composeServerApp = (cfg) => {
+    // ... wiring ...
+    return { listen, restaurant };
+};
+
+const composeCliApp = (cfg) => {
+    // ... wiring ...
+    return { run };
+};
 ```
 
-The pattern is completely predictable. You always know what to expect.
+Call sites are predictable: `make*` results are captured directly; `compose*`
+results are destructured by name:
+
+```ts
+// make* — direct capture
+const reserve = makeReserve({ db, restaurantCfg, logger, metrics });
+const db      = makeInMemoryDb({ logger, generateId: randomUUID });
+
+// compose* — named destructuring
+const { listen, restaurant } = composeServerApp({ restaurantCfg, logger, metrics, db, port });
+const { run }                = composeCliApp({ restaurantCfg, logger, metrics, db });
+```
 
 ---
 
@@ -175,11 +204,13 @@ The pattern is completely predictable. You always know what to expect.
 src/core/domain/          ← business operations (pure domain logic)
 src/core/ports/           ← interfaces (what each factory depends on)
 src/adapters/             ← concrete implementations (db, http, queue)
-src/compose.ts            ← the one place everything is wired together
+src/server/compose.ts     ← composition root for the HTTP server
+src/cli/compose.ts        ← composition root for the CLI
 ```
 
-`compose.ts` is the **composition root** — the only file that knows which
-concrete adapters are used. Everything else depends on interfaces. This is
+Each `compose.ts` is a **composition root** — the only file for its entry
+point that knows which concrete adapters are used. Everything else depends
+on interfaces. This is
 the Ports and Adapters (Hexagonal Architecture) pattern at the wiring layer.
 
 ---
