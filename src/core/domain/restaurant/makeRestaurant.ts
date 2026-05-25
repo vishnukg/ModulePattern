@@ -1,4 +1,4 @@
-import type { ReserveFn, CancelFn, UpdateFn, GetReservationsFn } from "./types.ts";
+import type { ReserveFn, CancelFn, UpdateFn, GetReservationsFn, Restaurant } from "./types.ts";
 
 type MakeRestaurantCfg = {
     reserve: ReserveFn;
@@ -7,7 +7,7 @@ type MakeRestaurantCfg = {
     getReservations: GetReservationsFn;
 };
 
-const makeRestaurant = ({ reserve, cancel, update, getReservations }: MakeRestaurantCfg) => ({
+const makeRestaurant = ({ reserve, cancel, update, getReservations }: MakeRestaurantCfg): Restaurant => ({
     reserve,
     cancel,
     update,

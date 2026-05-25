@@ -1,4 +1,4 @@
-import type { ReservationInput, DB, RestaurantCfg } from "../types.ts";
+import type { ReservationInput, DB, RestaurantCfg, ReserveFn } from "../types.ts";
 import type { Logger, Metrics } from "../../../ports/index.ts";
 
 type ReserveCfg = {
@@ -8,7 +8,7 @@ type ReserveCfg = {
     metrics: Metrics;
 };
 
-const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
+const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg): ReserveFn => {
     const reserve = async ({
         quantity,
         date,
