@@ -36,9 +36,7 @@ const makeRestaurantCli = ({ restaurant }: RestaurantCliCfg): RestaurantCli => {
     const getReservations = async (): Promise<string> => {
         const reservations = await restaurant.getReservations();
         if (reservations.length === 0) return "No reservations";
-        const lines = reservations.map(
-            (r) => `- ${r.id}: ${r.quantity} seat(s) on ${r.date}`,
-        );
+        const lines = reservations.map((r) => `- ${r.id}: ${r.quantity} seat(s) on ${r.date}`);
         return `${reservations.length} reservation(s):\n${lines.join("\n")}`;
     };
 

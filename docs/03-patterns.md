@@ -85,16 +85,17 @@ which both entry points reuse. It builds each operation from its driven ports
 
 ```ts
 // src/restaurant/domain/composeRestaurant.ts  — the single domain assembly
-const composeRestaurant = ({ db, logger, metrics, restaurantCfg }: ComposeRestaurantCfg): Restaurant => {
+const composeRestaurant = ({
+    db,
+    logger,
+    metrics,
+    restaurantCfg,
+}: ComposeRestaurantCfg): Restaurant => {
     const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
     const cancel = makeCancel({ db, logger, metrics });
     const update = makeUpdate({ db, logger, metrics, restaurantCfg });
-    return makeRestaurant({
-        reserve,
-        cancel,
-        update,
-        getReservations: db.getReservations,
-    });
+    const getReservations = makeGetReservations({ db });
+    return makeRestaurant({ reserve, cancel, update, getReservations });
 };
 ```
 

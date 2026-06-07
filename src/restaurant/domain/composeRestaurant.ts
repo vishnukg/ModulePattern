@@ -1,6 +1,7 @@
 import makeReserve from "./reservation/reserve.ts";
 import makeCancel from "./reservation/makeCancel.ts";
 import makeUpdate from "./reservation/makeUpdate.ts";
+import makeGetReservations from "./reservation/makeGetReservations.ts";
 import makeRestaurant from "./makeRestaurant.ts";
 import type { RestaurantCfg, Restaurant } from "./types.ts";
 import type { DB, Logger, Metrics } from "../ports/index.ts";
@@ -25,12 +26,8 @@ const composeRestaurant = ({
     const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
     const cancel = makeCancel({ db, logger, metrics });
     const update = makeUpdate({ db, logger, metrics, restaurantCfg });
-    return makeRestaurant({
-        reserve,
-        cancel,
-        update,
-        getReservations: db.getReservations,
-    });
+    const getReservations = makeGetReservations({ db });
+    return makeRestaurant({ reserve, cancel, update, getReservations });
 };
 
 export default composeRestaurant;

@@ -189,10 +189,16 @@ it before handing the result to its transport (HTTP or CLI):
 
 ```ts
 // src/restaurant/domain/composeRestaurant.ts
-const composeRestaurant = ({ db, logger, metrics, restaurantCfg }: ComposeRestaurantCfg): Restaurant => {
+const composeRestaurant = ({
+    db,
+    logger,
+    metrics,
+    restaurantCfg,
+}: ComposeRestaurantCfg): Restaurant => {
     const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
     const cancel = makeCancel({ db, logger, metrics });
     const update = makeUpdate({ db, logger, metrics, restaurantCfg });
-    return makeRestaurant({ reserve, cancel, update, getReservations: db.getReservations });
+    const getReservations = makeGetReservations({ db });
+    return makeRestaurant({ reserve, cancel, update, getReservations });
 };
 ```

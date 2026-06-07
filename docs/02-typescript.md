@@ -199,7 +199,7 @@ const restaurant = makeRestaurant({
     reserve,
     cancel,
     update,
-    getReservations: db.getReservations,
+    getReservations,
 });
 
 return { restaurant };

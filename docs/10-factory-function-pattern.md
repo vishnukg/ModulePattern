@@ -53,6 +53,99 @@ This separates two very different concerns:
 
 ---
 
+## The mental model: it's a tree
+
+The whole app is a dependency tree. The one core idea behind everything below:
+**separate _what each piece does_ from _how the pieces are connected_ — and never
+let a piece reach out for its own dependencies; they are always handed to it.**
+
+`make*` answers "what does this one thing do?" `compose*` answers "how are the
+things wired together?" That single split is the entire pattern. Here is the tree
+for this project, from the real world (top) down to the actual work (bottom):
+
+```text
+      THE REAL WORLD   (env vars, which DB?, sockets, process start)
+            │
+            ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│  index.ts   --   TRUNK  (the entry point)                              │
+│  - picks the concrete adapters: makeInMemoryDb, makeConsoleLogger ...  │
+│  - calls the top branch, then runs it:  listen()                       │
+└────────────────────────────────────────────────────────────────────────┘
+            │   dependencies handed DOWN
+            ▼
+composeServerApp             BRANCH  (composition root)  →  returns { listen }
+├─ composeRestaurant         BRANCH  (sub-composition)   →  returns a Restaurant
+│   ├─ makeReserve           leaf
+│   ├─ makeCancel            leaf
+│   ├─ makeUpdate            leaf
+│   ├─ makeGetReservations   leaf  (thin pass-through to the DB)
+│   └─ makeRestaurant        leaf  (bundles the four operations)
+├─ makeRestaurantRouter      leaf
+└─ makeRestaurantServer      leaf
+```
+
+Two things flow along the tree, in opposite directions and at different times —
+this is the [two-call shape](#the-two-call-shape) seen from above:
+
+```text
+WIRING TIME  (once, at startup):      dependencies flow DOWN
+    trunk  →  branches  →  leaves      (db, logger handed downward)
+
+RUNTIME  (per request, many times):   a request flows IN, a result comes back
+    reserve({ quantity, date })  →  "Accepted"
+```
+
+### Leaf vs branch vs trunk
+
+The tree metaphor maps almost perfectly — and it's the quickest way to _feel_
+the rule before reading its precise form below.
+
+**🍃 Leaf = `make*` — does the actual work.**
+
+- A leaf is where photosynthesis happens: it turns inputs into something useful.
+  `makeReserve` turns a booking into `"Accepted"` / `"Rejected"`.
+- It is **fed, it doesn't forage.** A leaf has water and light delivered to it; it
+  never goes looking. `makeReserve` is _handed_ `db` / `logger`; it never imports a
+  concrete database.
+- It is **terminal** — nothing grows past a leaf. A `make*` calls **no other
+  factory**; it's where the tree stops. (This is exactly what `npm run audit`
+  checks.)
+- Leaves share one shape: `(deps) => capability`. `makeReserve`, `makeInMemoryDb`,
+  `makeRestaurantRouter` — same silhouette, different work.
+
+**🌿 Branch = `compose*` — connects, but does no work of its own.**
+
+- A branch doesn't photosynthesize; it **holds leaves in position** and channels
+  resources to them. `composeServerApp` invents no behaviour — it arranges
+  behaviour that leaves already provide.
+- Branches **carry branches**: `composeServerApp` holds `composeRestaurant` (a
+  smaller branch) _plus_ leaves. The tree nests to any depth.
+- Its entire reason to exist is **connection**. Break a leaf and the app loses a
+  capability; break a branch and the pieces are fine — they're just no longer
+  joined.
+
+**🪵 Trunk = entry point (`index.ts`) — where the tree meets the ground.**
+
+- The trunk is the only part touching **soil**: env vars, _which_ database,
+  _which_ logger, starting the process.
+- It **chooses the concrete reality**, hands it up the tree, then lets everything
+  run. Above the trunk nothing knows whether the DB is in-memory or DynamoDB —
+  only the _port_ (the shape), never the concrete thing.
+
+**🍂 Plain functions = not part of the tree at all.**
+
+- `formatReport`, a validator, a data transform — these aren't factories and hold
+  no dependencies. They're tools applied to data _flowing through_ the tree, which
+  is why they get **no** `make*` / `compose*` prefix.
+
+Two rules we follow elsewhere fall straight out of this picture: a branch hands up
+only the capability the trunk runs (**return only what's driven** — never dangle
+the whole sub-tree out the side), and the trunk owns concreteness (**adapter
+selection lives in `index.ts`**, so everything above depends on ports).
+
+---
+
 ## make vs compose: when to use which
 
 Both `make*` and `compose*` are factory functions — you call them once at
@@ -62,14 +155,14 @@ function's **job**. Here is the entire rule.
 **`make*` = manufacture ONE thing.**
 A `make*` takes its dependencies (already built) and returns a single **port** —
 one function, or one object that implements one interface. It writes its logic
-**inline**; it does not call other factories to assemble itself. It is a *leaf*:
+**inline**; it does not call other factories to assemble itself. It is a _leaf_:
 the place a capability is actually defined.
 
 **`compose*` = assemble things that already exist.**
 A `compose*` **calls other factories** (`make*`, and sometimes other `compose*`)
 and/or **chooses which concrete adapter to use**, then wires the results
 together. It defines no new behaviour of its own — it connects behaviour that
-`make*` functions already provide. It is a *branch*.
+`make*` functions already provide. It is a _branch_.
 
 ### The one test that decides it
 
@@ -82,35 +175,108 @@ Open the function body and ask:
 
 That is the whole rule. The **return type does not matter**: a `compose*` may
 return a single named port (when it just assembles one domain) or a bag of peers
-(when it's an entry point's root). What makes it a compose is *calling other
-factories*, not what it returns.
+(when it's an entry point's root). What makes it a compose is _calling other
+factories_, not what it returns.
 
 The clearest proof is `makeRestaurant` vs `composeRestaurant` — **both return a
 `Restaurant`**, yet:
 
 ```ts
 // make: it is HANDED the operations and just bundles them → calls no factory
-const makeRestaurant = ({ reserve, cancel, update, getReservations }): Restaurant =>
-  ({ reserve, cancel, update, getReservations });
+const makeRestaurant = ({ reserve, cancel, update, getReservations }): Restaurant => ({
+    reserve,
+    cancel,
+    update,
+    getReservations,
+});
 
 // compose: it BUILDS the operations via make* factories, then bundles them
 const composeRestaurant = ({ db, logger, metrics, restaurantCfg }): Restaurant => {
-  const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
-  const cancel  = makeCancel({ db, logger, metrics });
-  const update  = makeUpdate({ db, logger, metrics, restaurantCfg });
-  return makeRestaurant({ reserve, cancel, update, getReservations: db.getReservations });
+    const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
+    const cancel = makeCancel({ db, logger, metrics });
+    const update = makeUpdate({ db, logger, metrics, restaurantCfg });
+    const getReservations = makeGetReservations({ db });
+    return makeRestaurant({ reserve, cancel, update, getReservations });
 };
 ```
 
+They look interchangeable because they return the same `Restaurant`, but they sit
+at different layers:
+
+|                      | `makeRestaurant`                     | `composeRestaurant`                                               |
+| -------------------- | ------------------------------------ | ----------------------------------------------------------------- |
+| **Takes in**         | the four finished operations         | raw infrastructure (`db`, `logger`, `metrics`, `cfg`)             |
+| **Does**             | nothing but bundle what it is handed | **builds** the operations (`makeReserve` etc.), then bundles them |
+| **Returns**          | a `Restaurant`                       | a `Restaurant`                                                    |
+| **Calls a factory?** | no → it's a **`make`** (leaf)        | yes → it's a **`compose`** (branch)                               |
+
+The kitchen analogy: **`makeRestaurant` is the tray** — hand it four cooked dishes
+and it arranges them into a meal; it never cooks. **`composeRestaurant` is the
+kitchen** — it takes raw ingredients (`db` / `logger` / `metrics`), cooks the four
+dishes (`makeReserve` / `makeCancel` / `makeUpdate` / `makeGetReservations`), then
+puts them on the tray.
+
+### We wrap every domain operation — even pure pass-throughs
+
+Notice all four operations in `composeRestaurant` are built the **same way**,
+`getReservations` included:
+
+```ts
+const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
+const cancel = makeCancel({ db, logger, metrics });
+const update = makeUpdate({ db, logger, metrics, restaurantCfg });
+const getReservations = makeGetReservations({ db }); // ← even this one
+return makeRestaurant({ reserve, cancel, update, getReservations });
+```
+
+`getReservations` is the odd one out behaviourally: it adds **no** domain logic
+today. Listing reservations is exactly what the database already does, and
+`db.getReservations` is already the domain's signature (`() => Promise<Reservation[]>`),
+so its factory is a one-line wrapper:
+
+```ts
+const makeGetReservations =
+    ({ db }: { db: DB }): GetReservationsFn =>
+    () =>
+        db.getReservations();
+```
+
+We **could** have skipped it and wired `db.getReservations` straight through. We
+wrap it anyway, on purpose, for two reasons:
+
+- **One rule, not two.** Every domain operation is a `make*` factory — no "is this
+  one wrapped, or passed straight through?" exception to carry in your head when
+  reading or writing `composeRestaurant`.
+- **The seam is already there.** The day `getReservations` needs a filter,
+  pagination, an audit log, or a metric, you add it _inside_ `makeGetReservations`
+  — `composeRestaurant` and every call site stay byte-for-byte unchanged.
+
+The other three were never optional: each genuinely **transforms** the DB's raw
+result into the domain's vocabulary, so the factory was always doing real work.
+
+| Domain op         | DB method it uses      | What its factory adds                                                                      |
+| ----------------- | ---------------------- | ------------------------------------------------------------------------------------------ |
+| `reserve`         | `db.saveReservation`   | the capacity rule (`quantity ≤ tableSize`) → `"Accepted"` / `"Rejected"`, metrics, logging |
+| `cancel`          | `db.cancelReservation` | maps the DB's `boolean` → `"Cancelled"` / `"NotFound"`, metrics, logging                   |
+| `update`          | `db.updateReservation` | maps `Reservation \| null` → `"Updated"` / `"Rejected"` / `"NotFound"`, the capacity rule  |
+| `getReservations` | `db.getReservations`   | **nothing today** — wrapped for consistency and a ready extension seam                     |
+
+**The rule:** every domain operation gets a `make*` factory — even a pure
+pass-through. The cost is one trivial wrapper; the payoff is a single uniform rule
+and a place for behaviour to land later. (Minimalism — wiring pass-throughs
+straight through and skipping the wrapper — is the valid alternative; this project
+chooses consistency.)
+
 ### This repo, function by function
 
-| Function | Kind | Why |
-| --- | --- | --- |
-| `makeReserve`, `makeCancel`, `makeUpdate` | `make*` | define the operation inline from `db`/`logger`/`metrics` |
-| `makeRestaurant` | `make*` | bundles operations it is **handed** — calls no factory |
-| `makeInMemoryDb`, `makeRestaurantRouter`, `makeRestaurantCli`, … | `make*` | define their behaviour inline |
-| `composeRestaurant` | `compose*` | calls `makeReserve` / `makeCancel` / `makeUpdate` / `makeRestaurant` |
-| `composeServerApp`, `composeCliApp` | `compose*` | call `composeRestaurant` + a driving adapter, return a bag of peers |
+| Function                                                         | Kind       | Why                                                                                          |
+| ---------------------------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------- |
+| `makeReserve`, `makeCancel`, `makeUpdate`                        | `make*`    | define the operation inline from `db`/`logger`/`metrics`                                     |
+| `makeGetReservations`                                            | `make*`    | thin pass-through to `db.getReservations` — wrapped for consistency (see above)              |
+| `makeRestaurant`                                                 | `make*`    | bundles operations it is **handed** — calls no factory                                       |
+| `makeInMemoryDb`, `makeRestaurantRouter`, `makeRestaurantCli`, … | `make*`    | define their behaviour inline                                                                |
+| `composeRestaurant`                                              | `compose*` | calls `makeReserve` / `makeCancel` / `makeUpdate` / `makeGetReservations` / `makeRestaurant` |
+| `composeServerApp`, `composeCliApp`                              | `compose*` | call `composeRestaurant` + a driving adapter, return a bag of peers                          |
 
 ### A third kind: plain functions
 
@@ -331,13 +497,13 @@ with the app, and the make/compose split is a _convention_ you must keep honest
 (which is why this repo ships an [audit](#this-rule-is-enforced-not-just-documented)).
 Here is the spectrum, simplest → heaviest:
 
-| Approach | vs. this repo | Choose it when |
-| --- | --- | --- |
-| **Plain functions, deps as params** — `reserve(deps, input)` | drops the factory/closure layer entirely | the app is tiny or the logic is mostly pure; you want the least machinery |
-| **Factory functions + manual compose** _(this repo)_ | — | small-to-medium apps; clarity and traceability matter most |
-| **One typed `deps` bag threaded through** | a single `AppDeps` object instead of per-factory configs | wiring churn hurts — but you accept weaker "visible dependencies at the boundary" |
-| **Effect-TS `Layer`s (or fp-ts `Reader`)** | a _compiler-checked_ composition root, plus typed errors/resources | you want the type system to prove the graph is wired |
-| **DI container (NestJS, tsyringe)** | decorators auto-wire at runtime | a large team/app where manual wiring is genuinely too much, and you accept reflection + runtime wiring errors |
+| Approach                                                     | vs. this repo                                                      | Choose it when                                                                                                |
+| ------------------------------------------------------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| **Plain functions, deps as params** — `reserve(deps, input)` | drops the factory/closure layer entirely                           | the app is tiny or the logic is mostly pure; you want the least machinery                                     |
+| **Factory functions + manual compose** _(this repo)_         | —                                                                  | small-to-medium apps; clarity and traceability matter most                                                    |
+| **One typed `deps` bag threaded through**                    | a single `AppDeps` object instead of per-factory configs           | wiring churn hurts — but you accept weaker "visible dependencies at the boundary"                             |
+| **Effect-TS `Layer`s (or fp-ts `Reader`)**                   | a _compiler-checked_ composition root, plus typed errors/resources | you want the type system to prove the graph is wired                                                          |
+| **DI container (NestJS, tsyringe)**                          | decorators auto-wire at runtime                                    | a large team/app where manual wiring is genuinely too much, and you accept reflection + runtime wiring errors |
 
 The honest weakness of _this_ pattern: the make/compose boundary is enforced by
 discipline, not the compiler. A wiring mistake — a domain function that quietly
@@ -351,13 +517,13 @@ Effect-TS is essentially "this pattern, leveled up" — the same ports / adapter
 composition-root ideas, but the **compiler tracks the dependency graph for you**.
 The mapping is almost one-to-one:
 
-| This repo | Effect-TS |
-| --- | --- |
-| a port (`DB`, `Logger` interface) | a `Context.Tag` — a typed key identifying a service |
-| a `make*` adapter | a value provided through a `Layer` |
-| a `compose*` / composition root | `Layer` composition (`Layer.provide` / `Layer.merge`) |
-| the domain op (`reserve`) | an `Effect<A, E, R>` — `R` is the set of services it needs |
-| `index.ts` running the app | `Effect.runPromise(program.pipe(Effect.provide(AppLive)))` |
+| This repo                         | Effect-TS                                                  |
+| --------------------------------- | ---------------------------------------------------------- |
+| a port (`DB`, `Logger` interface) | a `Context.Tag` — a typed key identifying a service        |
+| a `make*` adapter                 | a value provided through a `Layer`                         |
+| a `compose*` / composition root   | `Layer` composition (`Layer.provide` / `Layer.merge`)      |
+| the domain op (`reserve`)         | an `Effect<A, E, R>` — `R` is the set of services it needs |
+| `index.ts` running the app        | `Effect.runPromise(program.pipe(Effect.provide(AppLive)))` |
 
 A sketch of our `reserve` in Effect:
 
@@ -365,21 +531,24 @@ A sketch of our `reserve` in Effect:
 import { Context, Effect, Layer } from "effect";
 
 // A port becomes a Tag — a typed token for a service.
-class Db extends Context.Tag("Db")<Db, {
-  saveReservation: (input: ReservationInput) => Effect.Effect<Reservation>;
-}>() {}
+class Db extends Context.Tag("Db")<
+    Db,
+    {
+        saveReservation: (input: ReservationInput) => Effect.Effect<Reservation>;
+    }
+>() {}
 
 // The domain reads services from context instead of taking a config object.
 // Its type carries the dependency: Effect<Reservation, never, Db>.
 const reserve = (input: ReservationInput) =>
-  Effect.gen(function* () {
-    const db = yield* Db;                 // ← dependency, tracked in the type
-    return yield* db.saveReservation(input);
-  });
+    Effect.gen(function* () {
+        const db = yield* Db; // ← dependency, tracked in the type
+        return yield* db.saveReservation(input);
+    });
 
 // An adapter is provided as a Layer (this fuses make* with the wiring step).
 const DbLive = Layer.succeed(Db, {
-  saveReservation: (input) => Effect.succeed({ id: "r1", ...input }),
+    saveReservation: (input) => Effect.succeed({ id: "r1", ...input }),
 });
 
 // The composition root is just Layer composition.
