@@ -9,7 +9,7 @@ Each section shows the rule, where you can see it, why it matters, and how to ap
 
 1. [Dependency Inversion Principle](#1-dependency-inversion-principle)
 2. [Ports and Adapters (Hexagonal Architecture)](#2-ports-and-adapters-hexagonal-architecture)
-3. [Inward Dependency Rule](#3-inward-dependency-rule)
+3. [Inward Dependencies, Outward Control Flow](#3-inward-dependencies-outward-control-flow)
 4. [Separation of Concerns](#4-separation-of-concerns)
 5. [Single Responsibility Principle](#5-single-responsibility-principle)
 6. [Composition Root](#6-composition-root)
@@ -35,7 +35,7 @@ Both should depend on abstractions (interfaces).
 `makeInMemoryDb` or `makeDynamoDb`. It only knows about the `DB` interface:
 
 ```ts
-// src/core/domain/restaurant/reservation/reserve.ts
+// src/restaurant/domain/reservation/reserve.ts
 const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
   const reserve = async ({ quantity, date }: Reservation) => {
     await db.saveReservation({ quantity, date });  // ← calls the interface, not an implementation
@@ -45,7 +45,7 @@ const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
 };
 ```
 
-`ReserveCfg` requires `db: DB`, where `DB` is defined in `restaurant/types.ts`:
+`ReserveCfg` requires `db: DB`, where `DB` is the driven port defined in `ports/db.ts`:
 
 ```ts
 export interface DB {
@@ -103,7 +103,7 @@ real world and the interface the domain expects.
 
   makeRestaurantRouter ──┐                            ┌── makeInMemoryDb
                          │   ┌───────────────────┐    │
-  cli/index.ts ──────────┼──→│  reserve          │────┼── makeDynamoDb
+  makeRestaurantCli ─────┼──→│  reserve          │────┼── makeDynamoDb
                          │   │  cancel           │    │
                          │   │  update           │    ├── makeConsoleLogger
                          └──→│  getReservations  │    │
@@ -113,7 +113,7 @@ real world and the interface the domain expects.
           Restaurant port                  DB / Logger / Metrics ports
            (driving port)                     (driven ports)
            defined in                         defined in
-       domain/restaurant/types.ts        domain/restaurant/types.ts (DB)
+       domain/types.ts                   ports/db.ts (DB)
                                          ports/logger.ts (Logger)
                                          ports/metrics.ts (Metrics)
 ```
@@ -123,17 +123,23 @@ depends on nothing outside itself.
 
 **Where it lives in this codebase:**
 
-| Port         | Kind    | Defined in                   | Adapters that satisfy it               |
-| ------------ | ------- | ---------------------------- | -------------------------------------- |
-| `DB`         | Driven  | `domain/restaurant/types.ts` | `makeInMemoryDb`, `makeDynamoDb`       |
-| `Logger`     | Driven  | `ports/logger.ts`            | `makeConsoleLogger`                    |
-| `Metrics`    | Driven  | `ports/metrics.ts`           | `makeNoOpMetrics`                      |
-| `Restaurant` | Driving | `domain/restaurant/types.ts` | `makeRestaurantRouter`, `cli/index.ts` |
+| Port         | Kind    | Defined in         | Adapters that satisfy it                    |
+| ------------ | ------- | ------------------ | ------------------------------------------- |
+| `DB`         | Driven  | `ports/db.ts`      | `makeInMemoryDb`, `makeDynamoDb`            |
+| `Logger`     | Driven  | `ports/logger.ts`  | `makeConsoleLogger`                         |
+| `Metrics`    | Driven  | `ports/metrics.ts` | `makeNoOpMetrics`                           |
+| `Restaurant` | Driving | `domain/types.ts`  | `makeRestaurantRouter`, `makeRestaurantCli` |
 
-`DB` is defined inside `domain/restaurant/types.ts` — the domain module — not inside
-`adapters/db/`. This is intentional: the domain asks "what do I need a data store
-to be able to do?" and the adapters answer by satisfying the interface. They
-depend on the domain; the domain does not depend on them.
+All three driven ports live together in `ports/`, each with a matching adapter
+in `adapters/` — `ports/db.ts` ↔ `adapters/db/`, `ports/logger.ts` ↔
+`adapters/logger/`, and so on. This is intentional: the core asks "what do I need
+from infrastructure?" and the adapters answer by satisfying the interface. They
+depend on the core; the core does not depend on them.
+
+The one driving port, `Restaurant`, stays in `domain/types.ts` because it is the
+core's own public surface — the shape `makeRestaurant` _produces_, not something an
+adapter implements. The adapters that drive it (`makeRestaurantRouter` for HTTP,
+`makeRestaurantCli` for the terminal) call _through_ it.
 
 **Why it matters:**
 
@@ -154,43 +160,85 @@ adapter at the composition root.
 
 ---
 
-## 3. Inward Dependency Rule
+## 3. Inward Dependencies, Outward Control Flow
 
-**Rule:** Dependencies point inward, toward the domain.
-The domain imports nothing from infrastructure.
-Infrastructure imports from the domain.
+**Rule:** _Source-code_ dependencies always point **inward**, toward the core.
+_Control flow_ at runtime may point **outward**, from the core to infrastructure.
+The two directions are opposite — and reconciling them is the whole point of the
+pattern.
 
-**Where it lives in this codebase:**
+### Inward — who imports whom
+
+Every `import` points toward the core. Nothing in the core imports an adapter.
 
 ```
-ports/logger.ts          ←── domain/restaurant/  ←── adapters/db/makeInMemoryDb.ts
-ports/metrics.ts         ←──     (domain)         ←── adapters/db/makeDynamoDb.ts
-                                                  ←── adapters/http/makeRestaurantRouter.ts
-                                                  ←── server/compose.ts
-                                                  ←── cli/compose.ts
+   core (imports nothing outward)            infrastructure (imports inward)
+
+   ports/db.ts        ←──────────────────┬── adapters/db/makeInMemoryDb.ts
+   ports/logger.ts    ←──────────────────┼── adapters/db/makeDynamoDb.ts
+   ports/metrics.ts   ←──────────────────┼── adapters/logger/consoleLogger.ts
+   domain/  (reserve, ←──────────────────┼── adapters/http/makeRestaurantRouter.ts
+    cancel, update)                       ├── server/compose.ts
+                                          └── cli/compose.ts
 ```
 
-`domain/restaurant/` imports `Logger` and `Metrics` (abstract interfaces from `ports/`).
-It does not import `consoleLogger.ts`, `makeDynamoDb.ts`, or `express`.
+- `domain/` imports `DB`, `Logger`, `Metrics` (abstract interfaces from `ports/`).
+  It does not import `consoleLogger.ts`, `makeDynamoDb.ts`, or `express`.
+- `adapters/db/makeInMemoryDb.ts` imports `Reservation` (from `domain/types.ts`) and
+  `DB` (from `ports/db.ts`). It imports _toward_ the core.
 
-`adapters/db/makeInMemoryDb.ts` imports `Reservation` and `DB` from `domain/restaurant/types.ts`.
-It imports _toward_ the domain.
+### Outward — who calls whom at runtime
+
+At runtime, control flows the other way. When a reservation comes in, `reserve`
+_calls outward_ to the database:
+
+```ts
+await db.saveReservation({ quantity, date }); // domain → infrastructure, at runtime
+```
+
+The domain _uses_ a database — but it never _imports_ one. It calls through the
+`DB` port (an interface the core owns); the concrete `makeInMemoryDb` or
+`makeDynamoDb` is handed to it at the composition root.
+
+### How both can be true — Dependency Inversion
+
+Control flows outward (`reserve` → `db`), but the source dependency points inward
+(`makeInMemoryDb` → `DB`). They run in opposite directions because the **port sits
+in the middle**:
+
+```
+   compile-time:  makeInMemoryDb ──imports──▶  DB  (port, lives in the core)
+   runtime:       reserve ───────────calls───▶  db.saveReservation()
+```
+
+The adapter depends on the interface; the domain depends on the interface; neither
+depends on the other. Inverting the source dependency (adapter → core, never
+core → adapter) is exactly what lets control flow outward without the core ever
+knowing infrastructure exists. This is the **Dependency Inversion Principle**
+(section 1) applied at the module boundary: _source dependencies point against the
+flow of control._
 
 **Why it matters:**
 
-This rule is what makes the circular dependency we fixed a real problem.
-Before the fix, `db/types.ts` imported `Reservation` from `restaurant/types.ts`,
-AND `restaurant/types.ts` imported `DB` from `db/types.ts`. Each module needed
-the other to be understood. There was no "inside" — no stable core.
+The inward rule is what prevents circular dependencies. Imagine `DB` lived inside
+`adapters/db/` and the domain imported it from there — then `adapters/db/` would
+_also_ need `Reservation` from the domain, and you'd have a cycle: each module
+needs the other to be understood, with no stable "inside".
 
-After the fix, you can read `restaurant/types.ts` and understand the entire domain
-without opening a single file in `db/`, `logger/`, or `http/`.
+By keeping every port in the core (`ports/`), adapters import the contract and the
+domain types they need, and the core imports nothing from `db/`, `logger/`, or
+`http/`. You can read `domain/` and `ports/` and understand the entire contract
+without opening a single adapter.
 
 **How to apply it:**
 
-Draw your modules as concentric circles. Domain at the centre.
-Infrastructure at the edges. Allow arrows to point inward only.
-Any arrow pointing outward (domain → infrastructure) is a violation.
+Draw your modules as concentric circles — domain at the centre, infrastructure at
+the edges.
+
+- Every `import` arrow must point **inward**. An outward import (core → adapter) is
+  a violation — fix it by defining a port in the core and injecting the adapter at
+  the composition root.
+- Runtime **calls** may point outward, as long as they go through a port.
 
 ---
 
@@ -202,18 +250,19 @@ A module that contains business logic should not know about DynamoDB.
 
 **Where it lives in this codebase:**
 
-| Module               | Its one concern                                |
-| -------------------- | ---------------------------------------------- |
-| `domain/restaurant/` | Business rules (can we take this reservation?) |
-| `adapters/db/`       | Persistence (save and retrieve data)           |
-| `adapters/http/`     | HTTP transport (parse request, send response)  |
-| `adapters/logger/`   | Structured log output                          |
-| `adapters/metrics/`  | Timing and counter instrumentation             |
-| `ports/`             | Contracts (Logger, Metrics interfaces)         |
-| `server/compose.ts`  | Wiring domain ops for the HTTP server          |
-| `server/index.ts`    | HTTP server startup, infrastructure            |
-| `cli/compose.ts`     | Wiring domain ops for the CLI                  |
-| `cli/index.ts`       | CLI entry point, infrastructure                |
+| Module              | Its one concern                                 |
+| ------------------- | ----------------------------------------------- |
+| `domain/`           | Business rules (can we take this reservation?)  |
+| `adapters/db/`      | Persistence (save and retrieve data)            |
+| `adapters/http/`    | HTTP transport (parse request, send response)   |
+| `adapters/cli/`     | Terminal transport (parsed args → result line)  |
+| `adapters/logger/`  | Structured log output                           |
+| `adapters/metrics/` | Timing and counter instrumentation              |
+| `ports/`            | Contracts (DB, Logger, Metrics interfaces)      |
+| `server/compose.ts` | Wiring domain ops + HTTP adapter for the server |
+| `server/index.ts`   | HTTP server startup, infrastructure             |
+| `cli/compose.ts`    | Wiring domain ops + CLI adapter for the CLI     |
+| `cli/index.ts`      | CLI entry point, infrastructure                 |
 
 `makeRestaurantRouter.ts` handles HTTP concerns — it reads `req.body`,
 validates the raw input, maps outcomes to status codes (201/422/400).
@@ -360,7 +409,7 @@ The outer function (`make*`) takes dependencies and returns the inner function
 **Where it lives in this codebase:**
 
 ```ts
-// src/core/domain/restaurant/reservation/reserve.ts
+// src/restaurant/domain/reservation/reserve.ts
 const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
   //                  ↑ dependencies declared here, as parameters
 
@@ -552,9 +601,10 @@ Don't create a separate types file for types that are only used in one place.
 `CliAppCfg` is defined at the top of `cli/compose.ts`. It's only used there.
 Each type lives right next to the function that uses it — no extra file needed.
 
-`Reservation`, `RestaurantCfg`, `DB`, `Restaurant` are all in `restaurant/types.ts`
-because they are all restaurant domain concepts. They're used across multiple files,
-so a shared types file within the module is appropriate.
+`Reservation`, `RestaurantCfg`, and `Restaurant` are all in `domain/types.ts`
+because they are restaurant domain concepts. The `DB` port lives in `ports/db.ts`
+with the other driven ports. Both are shared across multiple files, so a shared
+types file within each is appropriate.
 
 `InMemoryDbCfg` is defined at the top of `makeInMemoryDb.ts` — one file uses it,
 so it lives there. Same for `DynamoDbCfg` in `makeDynamoDb.ts` and `ServerAppCfg`

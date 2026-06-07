@@ -1,7 +1,7 @@
-import { makeReserve, makeCancel, makeUpdate, makeRestaurant } from "../core/index.ts";
-import makeRestaurantRouter from "../adapters/http/makeRestaurantRouter.ts";
-import makeRestaurantServer from "../adapters/http/makeRestaurantServer.ts";
-import type { RestaurantCfg, DB, Logger, Metrics } from "../core/index.ts";
+import { makeReserve, makeCancel, makeUpdate, makeRestaurant } from "../restaurant/index.ts";
+import makeRestaurantRouter from "../restaurant/adapters/http/makeRestaurantRouter.ts";
+import makeRestaurantServer from "../restaurant/adapters/http/makeRestaurantServer.ts";
+import type { RestaurantCfg, DB, Logger, Metrics } from "../restaurant/index.ts";
 
 type ServerAppCfg = {
     restaurantCfg: RestaurantCfg;

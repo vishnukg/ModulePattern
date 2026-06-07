@@ -1,6 +1,6 @@
 import { PutCommand, ScanCommand, GetCommand, DeleteCommand } from "@aws-sdk/lib-dynamodb";
 import type { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
-import type { DB, Reservation, ReservationInput, Logger } from "../../core/index.ts";
+import type { DB, Reservation, ReservationInput, Logger } from "../../index.ts";
 
 type DynamoDbCfg = {
     tableName: string;

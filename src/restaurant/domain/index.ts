@@ -4,7 +4,6 @@ export type {
     Reservation,
     ReservationInput,
     RestaurantCfg,
-    DB,
     Restaurant,
     ReserveFn,
     CancelFn,

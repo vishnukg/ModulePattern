@@ -1,9 +1,9 @@
 import { parseArgs } from "node:util";
 import { randomUUID } from "node:crypto";
 import composeCliApp from "./compose.ts";
-import makeConsoleLogger from "../adapters/logger/consoleLogger.ts";
-import makeNoOpMetrics from "../adapters/metrics/makeNoOpMetrics.ts";
-import makeInMemoryDb from "../adapters/db/makeInMemoryDb.ts";
+import makeConsoleLogger from "../restaurant/adapters/logger/consoleLogger.ts";
+import makeNoOpMetrics from "../restaurant/adapters/metrics/makeNoOpMetrics.ts";
+import makeInMemoryDb from "../restaurant/adapters/db/makeInMemoryDb.ts";
 
 const { values } = parseArgs({
     options: {
@@ -17,7 +17,7 @@ const quantity = Number(values.quantity);
 const date = values.date ?? new Date().toLocaleDateString();
 const seats = Number(values.seats ?? 10);
 
-if (!values.quantity || isNaN(quantity)) {
+if (!values.quantity || Number.isNaN(quantity)) {
     console.error("Usage: cli --quantity <n> [--date <date>] [--seats <n>]");
     process.exit(1);
 }
@@ -26,7 +26,7 @@ const logger = makeConsoleLogger();
 const metrics = makeNoOpMetrics();
 const db = makeInMemoryDb({ logger, generateId: randomUUID });
 
-const { run } = composeCliApp({ restaurantCfg: { tableSize: seats }, logger, metrics, db });
-const result = await run({ quantity, date });
+const { cli } = composeCliApp({ restaurantCfg: { tableSize: seats }, logger, metrics, db });
+const message = await cli.reserve({ quantity, date }, seats);
 
-console.log(`Reservation ${result} — ${quantity} seat(s) on ${date} (table size: ${seats})`);
+console.log(message);

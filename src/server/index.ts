@@ -2,11 +2,11 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { randomUUID } from "node:crypto";
 import composeServerApp, { readPort } from "./compose.ts";
-import makeConsoleLogger from "../adapters/logger/consoleLogger.ts";
-import makeNoOpMetrics from "../adapters/metrics/makeNoOpMetrics.ts";
-import makeInMemoryDb from "../adapters/db/makeInMemoryDb.ts";
-import makeDynamoDb from "../adapters/db/makeDynamoDb.ts";
-import type { DB } from "../core/index.ts";
+import makeConsoleLogger from "../restaurant/adapters/logger/consoleLogger.ts";
+import makeNoOpMetrics from "../restaurant/adapters/metrics/makeNoOpMetrics.ts";
+import makeInMemoryDb from "../restaurant/adapters/db/makeInMemoryDb.ts";
+import makeDynamoDb from "../restaurant/adapters/db/makeDynamoDb.ts";
+import type { DB } from "../restaurant/index.ts";
 
 const port = readPort(process.env.PORT, 3000);
 const tableSize = Number(process.env.TABLE_SIZE ?? 10);
@@ -32,7 +32,7 @@ const db: DB = (() => {
 })();
 
 const { listen } = composeServerApp({ restaurantCfg: { tableSize }, logger, metrics, db, port });
-listen(p => {
+listen((p) => {
     logger.info("server started", {
         port: p,
         tableSize,

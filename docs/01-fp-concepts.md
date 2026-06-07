@@ -89,7 +89,7 @@ only way to interact with it. This is **encapsulation without classes**.
 `makeInMemoryDb` uses this exact pattern:
 
 ```ts
-// src/adapters/db/makeInMemoryDb.ts
+// src/restaurant/adapters/db/makeInMemoryDb.ts
 const makeInMemoryDb = ({ logger }: InMemoryDbCfg): DB => {
     const store: Reservation[] = []; // private, lives in the closure
 
@@ -164,7 +164,7 @@ The outer `make*` call configures the function once (at startup).
 The inner function is what's called at runtime (once per request).
 
 ```ts
-// src/core/domain/restaurant/reservation/reserve.ts
+// src/restaurant/domain/reservation/reserve.ts
 const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
     const reserve = async ({
         quantity,

@@ -1,4 +1,4 @@
-import type { Logger } from "../../src/core/index.ts";
+import type { Logger } from "../../src/restaurant/index.ts";
 
 const makeSilentLogger = (): Logger => ({
     info: () => {},

@@ -1,4 +1,4 @@
-import type { Metrics } from "../../core/index.ts";
+import type { Metrics } from "../../index.ts";
 
 const makeNoOpMetrics = (): Metrics => ({
     increment: () => {},

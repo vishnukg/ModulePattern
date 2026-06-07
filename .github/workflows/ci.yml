@@ -1,0 +1,16 @@
+name: CI
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+
+jobs:
+    ci:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            # Docker, Compose and Make are preinstalled on ubuntu runners, so CI runs
+            # the exact same command a developer runs locally — the Three Musketeers payoff.
+            - name: make ci
+              run: make ci

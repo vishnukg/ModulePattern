@@ -27,14 +27,14 @@ different implementations for production and testing.
 implementations will satisfy the same contract.
 
 ```ts
-// src/core/ports/logger.ts
+// src/restaurant/ports/logger.ts
 export interface Logger {
     info: (message: string, data?: Record<string, unknown>) => void;
     warn: (message: string, data?: Record<string, unknown>) => void;
     error: (message: string, data?: Record<string, unknown>) => void;
 }
 
-// src/core/ports/metrics.ts
+// src/restaurant/ports/metrics.ts
 export interface Metrics {
     increment: (name: string) => void;
     timing: (name: string, durationMs: number) => void;
@@ -58,7 +58,7 @@ inspection methods used in tests.
 
 ## 3. Concrete implementations
 
-**Console logger** — for production (`src/adapters/logger/consoleLogger.ts`):
+**Console logger** — for production (`src/restaurant/adapters/logger/consoleLogger.ts`):
 
 ```ts
 export default (): Logger => ({
@@ -187,7 +187,7 @@ it calls methods on _your_ instance.
 ```ts
 import makeFakeMetrics from "./helpers/fakeMetrics.ts";
 import makeSilentLogger from "./helpers/silentLogger.ts";
-import { makeReserve } from "../src/core/index.ts";
+import { makeReserve } from "../src/restaurant/index.ts";
 
 it("increments reservation.accepted on a successful reservation", async () => {
     const metrics = makeFakeMetrics();

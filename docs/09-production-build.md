@@ -73,7 +73,7 @@ you edit in your editor.
 
 ```
 Error: something went wrong
-    at reserve (src/core/domain/restaurant/reservation/reserve.ts:8:5)   ← exact source location
+    at reserve (src/restaurant/domain/reservation/reserve.ts:8:5)   ← exact source location
 ```
 
 ### VS Code debugging
@@ -161,3 +161,53 @@ bundle `node_modules` into the output. Everything else stays the same.
 | `npm run build`         | typecheck + tsup                   | Lambda / package distribution only |
 | `npm test`              | vitest                             | Always                             |
 | `npm run lint`          | eslint                             | Always                             |
+
+These are the real commands. They assume Node is installed on your machine.
+
+---
+
+## The Three Musketeers (Make + Docker + Compose)
+
+The npm scripts above need the right Node version installed locally. The
+**Three Musketeers** pattern ([3musketeers.io](https://3musketeers.io)) removes
+that assumption: `make <target>` runs each task **inside a container** defined by
+Compose, so the only things you need on the host are **Docker** and **Make**. The
+same `make` command runs on a laptop and in CI — _all for one, one for all_.
+
+The three parts:
+
+- **Make** — the single entry point. `Makefile` defines the targets.
+- **Docker** — the `node:24-slim` image provides a pinned, reproducible toolchain.
+- **Compose** — `docker-compose.yml` defines the `node` service (working dir,
+  `.env`, and a `node_modules` **named volume** so native binaries are built for
+  the container, never the host) plus `localstack` for DynamoDB.
+
+Each target is just `docker compose run --rm node <command>`, where `<command>` is
+one of the npm scripts above — so the Makefile orchestrates and `package.json`
+stays the single source of truth for what each task actually does.
+
+| Target                | Runs (in the container)                | When to use                  |
+| --------------------- | -------------------------------------- | ---------------------------- |
+| `make`                | lists all targets                      | anytime                      |
+| `make deps`           | `npm ci`                               | first run / lockfile changed |
+| `make typecheck`      | `npm run typecheck`                    | before a deploy              |
+| `make lint`           | `npm run lint`                         | always                       |
+| `make test`           | `npm test`                             | always                       |
+| `make build`          | `npm run build`                        | Lambda / distribution        |
+| `make fmt`            | `npm run format`                       | tidy the tree                |
+| `make ci`             | deps + typecheck + lint + test + build | what CI runs, clean checkout |
+| `make cli ARGS="..."` | `node src/cli/index.ts ARGS`           | run the CLI                  |
+| `make server`         | `npm start` (port 3000)                | run the HTTP server          |
+| `make server-dynamo`  | server wired to LocalStack             | dev against DynamoDB         |
+| `make up` / `down`    | start / stop LocalStack                | DynamoDB lifecycle           |
+
+CI is then trivial — `.github/workflows/ci.yml` checks out the repo and runs a
+single step, `make ci`, the exact command you run locally:
+
+```yaml
+- uses: actions/checkout@v4
+- run: make ci
+```
+
+That parity is the whole point: if `make ci` is green on your machine, it is green
+in CI, because it is the same command in the same container.

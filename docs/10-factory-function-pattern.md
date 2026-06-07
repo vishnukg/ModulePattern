@@ -46,10 +46,10 @@ await reserve({ quantity: 2, date: "2024-12-01" });
 
 This separates two very different concerns:
 
-| Phase | When | Who calls it |
-|---|---|---|
-| Construction | Startup | `compose.ts` |
-| Operation | Per request | HTTP handler, test, CLI |
+| Phase        | When        | Who calls it            |
+| ------------ | ----------- | ----------------------- |
+| Construction | Startup     | `compose.ts`            |
+| Operation    | Per request | HTTP handler, test, CLI |
 
 ---
 
@@ -123,8 +123,8 @@ familiar because you have already been thinking in its terms.
 
 ### Mark Seemann on "dependency rejection"
 
-Mark Seemann (author of *Dependency Injection Principles, Practices, and
-Patterns*) argues that functional code does not need DI the way OOP code
+Mark Seemann (author of _Dependency Injection Principles, Practices, and
+Patterns_) argues that functional code does not need DI the way OOP code
 does. In OOP, DI frameworks exist to work around the fact that objects
 hide their dependencies. In FP, dependencies are explicit function
 arguments — the type signature is the contract. Seemann calls this
@@ -156,7 +156,9 @@ when the port is a multi-method interface, that is an object:
 ```ts
 // Single-operation port — the function IS the port
 const makeReserve = (cfg: ReserveCfg): ReserveFn => {
-    return async (input) => { /* ... */ };
+    return async (input) => {
+        /* ... */
+    };
 };
 const reserve = makeReserve({ db, restaurantCfg, logger, metrics });
 
@@ -179,7 +181,7 @@ const composeServerApp = (cfg) => {
 
 const composeCliApp = (cfg) => {
     // ... wiring ...
-    return { run };
+    return { cli, restaurant };
 };
 ```
 
@@ -189,11 +191,11 @@ results are destructured by name:
 ```ts
 // make* — direct capture
 const reserve = makeReserve({ db, restaurantCfg, logger, metrics });
-const db      = makeInMemoryDb({ logger, generateId: randomUUID });
+const db = makeInMemoryDb({ logger, generateId: randomUUID });
 
 // compose* — named destructuring
 const { listen, restaurant } = composeServerApp({ restaurantCfg, logger, metrics, db, port });
-const { run }                = composeCliApp({ restaurantCfg, logger, metrics, db });
+const { cli } = composeCliApp({ restaurantCfg, logger, metrics, db });
 ```
 
 ---
@@ -201,9 +203,9 @@ const { run }                = composeCliApp({ restaurantCfg, logger, metrics, d
 ## Where the pattern lives in this project
 
 ```text
-src/core/domain/          ← business operations (pure domain logic)
-src/core/ports/           ← interfaces (what each factory depends on)
-src/adapters/             ← concrete implementations (db, http, queue)
+src/restaurant/domain/          ← business operations (pure domain logic)
+src/restaurant/ports/           ← interfaces (what each factory depends on)
+src/restaurant/adapters/             ← concrete implementations (db, http, queue)
 src/server/compose.ts     ← composition root for the HTTP server
 src/cli/compose.ts        ← composition root for the CLI
 ```
@@ -248,11 +250,13 @@ Adapters wiring — with no framework, no decorators, and no `this`.
 ## Further reading
 
 **Factory functions and the Module Pattern**
+
 - [From the Module Pattern to Factory Functions](https://medium.com/programming-essentials/from-the-module-pattern-to-factory-functions-a741cfbe818e) — Cristian Salcescu. Traces the evolution from IIFE → Revealing Module → reusable factory.
 - [Factory Functions and the Module Pattern](https://www.theodinproject.com/lessons/node-path-javascript-factory-functions-and-the-module-pattern) — The Odin Project. Practical walkthrough with closure examples.
 - [Factory functions](https://medium.com/@_ericelliott/factory-functions-b50d041bb023) — Eric Elliott. The primary advocate for replacing classes with factory functions in JavaScript.
 
 **Functional Dependency Injection**
+
 - [Functional Dependency Injection in TypeScript](https://hassannteifeh.medium.com/functional-dependency-injection-in-typescript-4c2739326f57) — Hassan Nteifeh. Walks through the exact pattern this project uses.
 - [TypeScript FP Dependency Injection Is Easy!](https://dev.to/tareksalem/typescript-fp-dependency-injection-is-easy-18pn) — DEV Community.
 - [Dependency Injection in TypeScript](https://mateuszsuchon.com/articles/dependency-injection-in-typescript) — Mateusz Suchoń. Contrasts functional and OOP approaches.
@@ -260,12 +264,15 @@ Adapters wiring — with no framework, no decorators, and no `this`.
 - [Dependency Injection, Currying and Partial Application](https://medium.com/@curtistatewilkinson/dependency-injection-currying-and-partial-application-for-easy-unit-tests-ded40c39016c) — Curtis Tate Wilkinson.
 
 **The Reader Monad connection**
+
 - [Dependency Injection and Reader Monad](https://dev.to/napicella/dependency-injection-and-reader-monad-5ap4) — DEV Community. Shows how factory functions are a practical Reader monad.
 - [Purely functional dependency injection in TypeScript](https://anttih.com/articles/2018/07/05/purely-functional-di) — Antti Holvikari. Deep dive into the FP underpinnings.
 
 **Mark Seemann — Dependency Rejection**
+
 - [From Dependency Injection to Dependency Rejection](https://www.youtube.com/watch?v=cxs7oLGrxQ4) — Talk arguing that FP makes explicit DI containers unnecessary.
 
 **Ports and Adapters (Hexagonal Architecture)**
+
 - [Hexagonal Architecture](https://jmgarridopaz.github.io/content/hexagonalarchitecture.html) — Juan Manuel Garrido de Paz. The original pattern this wiring style implements.
 - [Ports and Adapters Architecture](https://medium.com/the-software-architecture-chronicles/ports-adapters-architecture-d19f2d476eca) — Herberto Graça.

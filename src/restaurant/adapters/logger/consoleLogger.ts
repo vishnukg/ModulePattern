@@ -1,4 +1,4 @@
-import type { Logger } from "../../core/index.ts";
+import type { Logger } from "../../index.ts";
 
 const makeConsoleLogger = (): Logger => ({
     info: (message, data) => console.log(JSON.stringify({ level: "info", message, ...data })),

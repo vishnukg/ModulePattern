@@ -1,4 +1,4 @@
-import type { DB, Reservation, ReservationInput, Logger } from "../../core/index.ts";
+import type { DB, Reservation, ReservationInput, Logger } from "../../index.ts";
 
 type InMemoryDbCfg = { logger: Logger; generateId: () => string };
 

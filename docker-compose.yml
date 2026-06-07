@@ -1,13 +1,31 @@
 services:
-    localstack:
-        image: localstack/localstack:3
-        ports:
-            - "4566:4566"
-        environment:
-            - SERVICES=dynamodb
-            - DEFAULT_REGION=us-east-1
-        healthcheck:
-            test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
-            interval: 5s
-            timeout: 5s
-            retries: 10
+  # The single toolchain container. Every Make target runs here via
+  # `docker compose run --rm node ...`, so commands behave the same on a
+  # laptop and in CI. node_modules is a named volume (not a host bind mount)
+  # so native binaries are built for the container, never the host.
+  node:
+    image: node:24-slim
+    working_dir: /app
+    init: true
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+  # No default command — the Makefile passes one per invocation.
+
+  localstack:
+    image: localstack/localstack:3
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=dynamodb
+      - DEFAULT_REGION=us-east-1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+volumes:
+  node_modules:

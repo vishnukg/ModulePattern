@@ -12,7 +12,7 @@ The `reserve` function never imports DynamoDB directly. It only knows about the
 `DB` interface:
 
 ```ts
-// src/core/domain/restaurant/types.ts  ← the domain owns this interface
+// src/restaurant/ports/db.ts  ← a driven port the core owns
 export interface DB {
     saveReservation: (input: ReservationInput) => Promise<Reservation>;
     getReservations: () => Promise<Reservation[]>;
@@ -21,10 +21,10 @@ export interface DB {
 }
 ```
 
-`DB` lives in `domain/restaurant/types.ts` — not in `adapters/db/`. The domain defines
+`DB` lives in `ports/db.ts` — not in `adapters/db/`. The core defines
 what a database must be able to do; adapters satisfy that contract.
-This is the **Inward Dependency Rule**: `adapters/` imports from `domain/`, never
-the other way around.
+This is the **Inward Dependency Rule**: `adapters/` imports from the core
+(`domain/` + `ports/`), never the other way around.
 
 As long as something satisfies this shape, `reserve` doesn't care whether the
 data lives in memory, DynamoDB, PostgreSQL, or a text file.
@@ -39,7 +39,7 @@ code (business rules) depends on an abstraction, not a concrete implementation.
 ### In-memory (tests and quick local runs)
 
 ```ts
-// src/adapters/db/makeInMemoryDb.ts
+// src/restaurant/adapters/db/makeInMemoryDb.ts
 type InMemoryDbCfg = { logger: Logger; generateId: () => string };
 
 const makeInMemoryDb = ({ logger, generateId }: InMemoryDbCfg): DB => {
@@ -95,7 +95,7 @@ Key things to notice:
 ### DynamoDB (production / LocalStack)
 
 ```ts
-// src/adapters/db/makeDynamoDb.ts
+// src/restaurant/adapters/db/makeDynamoDb.ts
 type DynamoDbCfg = {
     tableName: string;
     client: DynamoDBDocumentClient; // constructed and injected by server/index.ts
@@ -315,12 +315,12 @@ but are outside the scope of this learning project.
 
 ## Summary
 
-| Layer          | File                                  | What it does                                       |
-| -------------- | ------------------------------------- | -------------------------------------------------- |
-| Interface      | `src/core/domain/restaurant/types.ts` | Defines what a DB must be able to do (domain port) |
-| In-memory impl | `makeInMemoryDb.ts`                   | Fast, no deps — used in tests and by default       |
-| DynamoDB impl  | `makeDynamoDb.ts`                     | Real AWS storage via DocumentClient                |
-| Wiring         | `src/server/compose.ts`               | Wires domain operations together                   |
-| Entry point    | `src/server/index.ts`                 | Reads env vars, creates db, calls compose          |
-| Local infra    | `docker-compose.yml`                  | LocalStack container                               |
-| Table setup    | `scripts/setup-local.sh`              | Creates the `reservations` table                   |
+| Layer          | File                         | What it does                                       |
+| -------------- | ---------------------------- | -------------------------------------------------- |
+| Interface      | `src/restaurant/ports/db.ts` | Defines what a DB must be able to do (driven port) |
+| In-memory impl | `makeInMemoryDb.ts`          | Fast, no deps — used in tests and by default       |
+| DynamoDB impl  | `makeDynamoDb.ts`            | Real AWS storage via DocumentClient                |
+| Wiring         | `src/server/compose.ts`      | Wires domain operations together                   |
+| Entry point    | `src/server/index.ts`        | Reads env vars, creates db, calls compose          |
+| Local infra    | `docker-compose.yml`         | LocalStack container                               |
+| Table setup    | `scripts/setup-local.sh`     | Creates the `reservations` table                   |

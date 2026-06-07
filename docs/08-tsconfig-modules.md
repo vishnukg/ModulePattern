@@ -11,13 +11,13 @@ and when each one is correct.
 When TypeScript sees this import:
 
 ```ts
-import { makeReserve } from "./domain/restaurant";
+import { makeReserve } from "./domain";
 ```
 
 It needs to figure out which file that refers to. Is it:
 
-- `./domain/restaurant.ts`?
-- `./domain/restaurant/index.ts`?
+- `./domain.ts`?
+- `./domain/index.ts`?
 - Something else?
 
 The answer depends on which **module resolution strategy** is configured.
@@ -34,13 +34,13 @@ Every import must specify the exact path the runtime will find.
 
 ```ts
 // ✓ — explicit path, explicit extension
-import { makeReserve } from "./domain/restaurant/index.ts";
+import { makeReserve } from "./domain/index.ts";
 
 // ✗ — TypeScript error: directory imports not allowed
-import { makeReserve } from "./domain/restaurant";
+import { makeReserve } from "./domain";
 
 // ✗ — TypeScript error: extension required
-import { makeReserve } from "./domain/restaurant/index";
+import { makeReserve } from "./domain/index";
 ```
 
 Use this when: your code runs directly in Node.js as native ESM
@@ -54,13 +54,13 @@ themselves at build or run time.
 
 ```ts
 // ✓ — directory import resolves to index.ts
-import { makeReserve } from "./domain/restaurant";
+import { makeReserve } from "./domain";
 
 // ✓ — explicit path still works
-import { makeReserve } from "./domain/restaurant/index.ts";
+import { makeReserve } from "./domain/index.ts";
 
 // ✓ — extension optional
-import { makeReserve } from "./domain/restaurant/reserve";
+import { makeReserve } from "./domain/reserve";
 ```
 
 Use this when: you use `tsx`, `ts-node`, Vite, esbuild, or any bundler to
@@ -90,7 +90,7 @@ so imports that pass `tsc --noEmit` are guaranteed to work at runtime too.
 
 One extra flag required: `"allowImportingTsExtensions": true`.
 Since we run `.ts` files directly (no compilation step), import paths use `.ts`
-extensions (e.g. `from "../restaurant/types.ts"`). Without this flag,
+extensions (e.g. `from "../domain/types.ts"`). Without this flag,
 `tsc --noEmit` rejects them because normally TypeScript emits `.js` files and
 `.ts` import extensions would be wrong in the output. With `"noEmit": true`
 there is no output, so the flag is safe to enable.
@@ -98,8 +98,8 @@ there is no output, so the flag is safe to enable.
 All imports in this project therefore look like:
 
 ```ts
-import { makeReserve } from "../domain/restaurant/index.ts"; // ✓
-import { makeReserve } from "../domain/restaurant"; // ✗ — directory import forbidden
+import { makeReserve } from "../domain/index.ts"; // ✓
+import { makeReserve } from "../domain"; // ✗ — directory import forbidden
 ```
 
 ---

@@ -77,7 +77,7 @@ In this project generics appear in the `DB` interface — `Promise<T>` means
 "an async operation that resolves to `T`":
 
 ```ts
-// src/core/domain/restaurant/types.ts
+// src/restaurant/ports/db.ts
 export type DB = {
     saveReservation: (input: ReservationInput) => Promise<Reservation>;
     getReservations: () => Promise<Reservation[]>;
@@ -225,7 +225,7 @@ is the variable value being assigned to that property.
 The caller can then use **object destructuring**:
 
 ```ts
-const { run } = composeCliApp({
+const { cli } = composeCliApp({
     restaurantCfg: { tableSize: seats },
     logger,
     metrics,
@@ -243,17 +243,17 @@ const app = composeCliApp({
     db,
 });
 
-const run = app.run;
+const cli = app.cli;
 ```
 
 This pattern appears in the composition roots:
 
 ```ts
 // src/cli/compose.ts
-return { run };
+return { cli, restaurant };
 
 // src/cli/index.ts
-const { run } = composeCliApp(...);
+const { cli } = composeCliApp(...);
 ```
 
 The outer object lets a composition function return named app capabilities —

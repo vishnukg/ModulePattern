@@ -7,7 +7,12 @@ type MakeRestaurantCfg = {
     getReservations: GetReservationsFn;
 };
 
-const makeRestaurant = ({ reserve, cancel, update, getReservations }: MakeRestaurantCfg): Restaurant => ({
+const makeRestaurant = ({
+    reserve,
+    cancel,
+    update,
+    getReservations,
+}: MakeRestaurantCfg): Restaurant => ({
     reserve,
     cancel,
     update,

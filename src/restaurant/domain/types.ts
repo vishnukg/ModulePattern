@@ -14,19 +14,11 @@ export type UpdateFn = (
 ) => Promise<"Updated" | "Rejected" | "NotFound">;
 export type GetReservationsFn = () => Promise<Reservation[]>;
 
-// ── Ports (interfaces the domain defines; adapters in db/ and http/ satisfy them)
+// ── Driving port ────────────────────────────────────────────────────────────────
 
-// Driven port — what the domain requires from a data store.
-// makeInMemoryDb and makeDynamoDb are the adapters that implement this.
-export interface DB {
-    saveReservation: (input: ReservationInput) => Promise<Reservation>;
-    getReservations: () => Promise<Reservation[]>;
-    cancelReservation: (id: string) => Promise<boolean>;
-    updateReservation: (id: string, input: ReservationInput) => Promise<Reservation | null>;
-}
-
-// Driving port — what the outside world (HTTP router, CLI) calls into the domain.
-// makeRestaurantRouter is the adapter that translates HTTP into calls on this interface.
+// What the outside world (HTTP router, CLI) calls into the domain — the shape that
+// makeRestaurant produces. makeRestaurantRouter translates HTTP into calls on it.
+// (Driven ports the domain depends on — DB, Logger, Metrics — live in ../ports/.)
 export interface Restaurant {
     reserve: ReserveFn;
     cancel: CancelFn;

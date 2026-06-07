@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
-import { makeReserve } from "../src/core/index.ts";
-import type { DB } from "../src/core/index.ts";
-import type { Logger, Metrics } from "../src/core/index.ts";
+import { makeReserve } from "../src/restaurant/index.ts";
+import type { DB } from "../src/restaurant/index.ts";
+import type { Logger, Metrics } from "../src/restaurant/index.ts";
 
 // Stubs — plain objects used when the test does not care about the interaction.
 const stubDb: DB = {

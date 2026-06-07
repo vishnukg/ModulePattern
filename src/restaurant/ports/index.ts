@@ -1,2 +1,3 @@
+export type { DB } from "./db.ts";
 export type { Logger } from "./logger.ts";
 export type { Metrics, FakeMetrics } from "./metrics.ts";

@@ -1,5 +1,6 @@
-import { makeReserve, makeCancel, makeUpdate, makeRestaurant } from "../core/index.ts";
-import type { RestaurantCfg, DB, Logger, Metrics } from "../core/index.ts";
+import { makeReserve, makeCancel, makeUpdate, makeRestaurant } from "../restaurant/index.ts";
+import makeRestaurantCli from "../restaurant/adapters/cli/makeRestaurantCli.ts";
+import type { RestaurantCfg, DB, Logger, Metrics } from "../restaurant/index.ts";
 
 type CliAppCfg = {
     restaurantCfg: RestaurantCfg;
@@ -18,8 +19,9 @@ const composeCliApp = ({ restaurantCfg, logger, metrics, db }: CliAppCfg) => {
         update,
         getReservations: db.getReservations,
     });
+    const cli = makeRestaurantCli({ restaurant });
 
-    return { run: restaurant.reserve };
+    return { cli, restaurant };
 };
 
 export default composeCliApp;
