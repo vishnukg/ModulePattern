@@ -24,7 +24,7 @@ const composeServerApp = ({ restaurantCfg, logger, metrics, db, port = 3000 }: S
         });
     };
 
-    return { listen, restaurant };
+    return { listen };
 };
 
 export const readPort = (value: string | undefined, fallback: number): number => {

@@ -115,7 +115,7 @@ const composeServerApp = ({ restaurantCfg, logger, metrics, db, port = 3000 }: S
         app.listen(port, () => logger.info("server started", { port }));
     };
 
-    return { listen, restaurant };
+    return { listen };
 };
 ```
 
@@ -135,9 +135,12 @@ follow. What's left in each `compose*` is genuinely entry-point-specific: the
 server exposes `listen`, the CLI exposes `cli`, and the only structural
 difference between them is HTTP router vs. CLI driving adapter.
 
-`compose*` functions return a **named bag of independent peers** — the things
-the entry point needs to drive the app. The entry point (`index.ts`) owns all
-infrastructure decisions and calls exactly the peers it needs:
+Each `compose*` returns exactly the capability its entry point drives — `{ listen }`
+for the server, `{ cli }` for the CLI. (A `compose*` _can_ return a named bag of
+several peers when an entry point needs more than one; here each needs just one.)
+Integration tests skip the transport entirely and call `composeRestaurant`
+directly for a `Restaurant` to exercise (see `tests/reservation.test.ts`). The
+entry point (`index.ts`) owns all infrastructure decisions:
 
 ```ts
 // src/server/index.ts  — infrastructure decisions live here
@@ -218,20 +221,20 @@ Each test creates exactly what it needs, nothing more.
 
 In each compose function, every `make*` call runs exactly once — every
 service is a **singleton within a single compose call**. Two calls to
-`composeServerApp()` produce two fully independent sets of services.
+`composeRestaurant()` produce two fully independent sets of services.
 
 This is important for tests: each test that wires modules directly gets
 a fresh `db` with an empty store.
 
 ```ts
 // Each call creates a fresh in-memory store — tests never interfere
-const { restaurant: r1 } = composeServerApp({
+const r1 = composeRestaurant({
     restaurantCfg: { tableSize: 10 },
     logger,
     metrics,
     db: makeInMemoryDb({ logger, generateId: randomUUID }),
 });
-const { restaurant: r2 } = composeServerApp({
+const r2 = composeRestaurant({
     restaurantCfg: { tableSize: 10 },
     logger,
     metrics,

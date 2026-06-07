@@ -256,19 +256,24 @@ return { cli };
 const { cli } = composeCliApp(...);
 ```
 
-The outer object lets a composition function return named app capabilities —
-each caller destructures only the peers it needs. The server root returns two
-peers, and each caller takes just the one it uses:
+The outer object lets a composition function return named app capabilities. Each
+composition root returns exactly the one its entry point drives, so the caller
+destructures that single capability:
 
 ```ts
 // src/server/compose.ts
-return { listen, restaurant };
+return { listen };
 
-// entry point only needs listen
+// entry point
 const { listen } = composeServerApp(...);
 listen();
+```
 
-// a test only needs restaurant
-const { restaurant } = composeServerApp(...);
+Integration tests don't go through the server at all — they call
+`composeRestaurant` directly, which returns the `Restaurant` port (captured
+directly, no destructuring needed):
+
+```ts
+const restaurant = composeRestaurant({ db, logger, metrics, restaurantCfg });
 await restaurant.reserve({ quantity: 2, date: "2024-12-01" });
 ```

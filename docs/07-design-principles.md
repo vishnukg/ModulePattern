@@ -362,7 +362,7 @@ const composeServerApp = ({ restaurantCfg, logger, metrics, db, port = 3000 }: S
         app.listen(port, () => logger.info("server started", { port }));
     };
 
-    return { listen, restaurant };
+    return { listen };
 };
 ```
 

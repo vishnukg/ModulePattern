@@ -246,15 +246,16 @@ const makeInMemoryDb = (cfg: InMemoryDbCfg): DB => {
 const db = makeInMemoryDb({ logger, generateId });
 ```
 
-`compose*` functions return **whatever the caller needs** — most often a
-**named bag of independent peers** for an entry point to drive, but sometimes a
-single assembled port when the composition's job is just to build one thing:
+`compose*` functions return **whatever the caller needs** — sometimes a single
+assembled port (when the job is just to build one thing), sometimes a named bag
+of peers (when an entry point needs several). Each entry-point root here returns
+the one capability its `index.ts` drives:
 
 ```ts
-// Composition root for an entry point — a named bag of peers
+// Composition roots — each returns the single capability its entry point drives
 const composeServerApp = (cfg) => {
     // ... wiring ...
-    return { listen, restaurant };
+    return { listen };
 };
 
 const composeCliApp = (cfg) => {
@@ -262,23 +263,23 @@ const composeCliApp = (cfg) => {
     return { cli };
 };
 
-// Domain assembly reused by both entry points — a single port
+// Domain assembly reused by both entry points — returns the Restaurant port.
+// Integration tests call this directly to drive the domain without a transport.
 const composeRestaurant = (cfg): Restaurant => {
     // ... builds reserve/cancel/update, bundles them ...
     return makeRestaurant({ reserve, cancel, update, getReservations });
 };
 ```
 
-Call sites are predictable: `make*` results are captured directly; `compose*`
-results are destructured by name:
+Call sites are predictable — a `compose*` that returns one port is captured
+directly; one that returns a named bag is destructured:
 
 ```ts
-// make* — direct capture
-const reserve = makeReserve({ db, restaurantCfg, logger, metrics });
-const db = makeInMemoryDb({ logger, generateId: randomUUID });
+// returns a single port → capture directly
+const restaurant = composeRestaurant({ db, restaurantCfg, logger, metrics });
 
-// compose* — named destructuring
-const { listen, restaurant } = composeServerApp({ restaurantCfg, logger, metrics, db, port });
+// returns a named bag → destructure what you need
+const { listen } = composeServerApp({ restaurantCfg, logger, metrics, db, port });
 const { cli } = composeCliApp({ restaurantCfg, logger, metrics, db });
 ```
 
