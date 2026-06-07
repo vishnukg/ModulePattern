@@ -250,14 +250,15 @@ This pattern appears in the composition roots:
 
 ```ts
 // src/cli/compose.ts
-return { cli, restaurant };
+return { cli };
 
 // src/cli/index.ts
 const { cli } = composeCliApp(...);
 ```
 
 The outer object lets a composition function return named app capabilities —
-each caller destructures only the peers it needs:
+each caller destructures only the peers it needs. The server root returns two
+peers, and each caller takes just the one it uses:
 
 ```ts
 // src/server/compose.ts

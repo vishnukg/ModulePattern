@@ -213,7 +213,7 @@ and no knowledge of environment variables:
 ```ts
 // src/server/compose.ts
 const composeServerApp = ({ restaurantCfg, logger, metrics, db, port = 3000 }: ServerAppCfg) => {
-  const reserve    = makeReserve({ db, logger, metrics, restaurantCfg });
+  const restaurant = composeRestaurant({ db, logger, metrics, restaurantCfg });
   ...
 };
 ```

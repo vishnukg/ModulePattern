@@ -334,23 +334,25 @@ cross-cutting dependencies (logger, db, metrics).
 
 **Where it lives in this codebase:**
 
-Each entry point has its own composition root. `src/server/compose.ts` wires
-the domain operations for the HTTP server; `src/cli/compose.ts` wires what
-the CLI needs. Both take all deps as required parameters — no defaults, no
+The domain itself is assembled in one shared helper, `composeRestaurant`, so the
+operation wiring is never duplicated. Each entry point then has a thin
+composition root — `src/server/compose.ts` for the HTTP server, `src/cli/compose.ts`
+for the CLI — that calls `composeRestaurant` and wraps it with its own driving
+adapter. All take their deps as required parameters — no defaults, no
 infrastructure decisions inside them:
 
 ```ts
-// src/server/compose.ts
-const composeServerApp = ({ restaurantCfg, logger, metrics, db, port = 3000 }: ServerAppCfg) => {
+// src/restaurant/domain/composeRestaurant.ts  — domain wired in one place
+const composeRestaurant = ({ db, logger, metrics, restaurantCfg }: ComposeRestaurantCfg): Restaurant => {
     const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
     const cancel = makeCancel({ db, logger, metrics });
     const update = makeUpdate({ db, logger, metrics, restaurantCfg });
-    const restaurant = makeRestaurant({
-        reserve,
-        cancel,
-        update,
-        getReservations: db.getReservations,
-    });
+    return makeRestaurant({ reserve, cancel, update, getReservations: db.getReservations });
+};
+
+// src/server/compose.ts  — reuses it, adds the HTTP transport
+const composeServerApp = ({ restaurantCfg, logger, metrics, db, port = 3000 }: ServerAppCfg) => {
+    const restaurant = composeRestaurant({ db, logger, metrics, restaurantCfg });
     const router = makeRestaurantRouter({ restaurant });
 
     const listen = () => {

@@ -1,4 +1,4 @@
-import { makeReserve, makeCancel, makeUpdate, makeRestaurant } from "../restaurant/index.ts";
+import { composeRestaurant } from "../restaurant/index.ts";
 import makeRestaurantRouter from "../restaurant/adapters/http/makeRestaurantRouter.ts";
 import makeRestaurantServer from "../restaurant/adapters/http/makeRestaurantServer.ts";
 import type { RestaurantCfg, DB, Logger, Metrics } from "../restaurant/index.ts";
@@ -12,15 +12,7 @@ type ServerAppCfg = {
 };
 
 const composeServerApp = ({ restaurantCfg, logger, metrics, db, port = 3000 }: ServerAppCfg) => {
-    const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
-    const cancel = makeCancel({ db, logger, metrics });
-    const update = makeUpdate({ db, logger, metrics, restaurantCfg });
-    const restaurant = makeRestaurant({
-        reserve,
-        cancel,
-        update,
-        getReservations: db.getReservations,
-    });
+    const restaurant = composeRestaurant({ db, logger, metrics, restaurantCfg });
     const router = makeRestaurantRouter({ restaurant });
     const app = makeRestaurantServer({ router });
 

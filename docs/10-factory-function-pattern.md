@@ -53,6 +53,62 @@ This separates two very different concerns:
 
 ---
 
+## `make*` vs `compose*` — which one am I writing?
+
+Both are factories (functions that return things), but they sit at different
+layers and answer different questions. Getting this distinction right is what
+keeps the codebase navigable.
+
+**`make*` — build _one_ capability from dependencies you are handed.**
+
+A `make*` factory receives its dependencies **already built** and returns a
+single **port**: a function (single-operation port) or an object (multi-method
+port). It does the work of exactly one thing. It never decides _which_ concrete
+dependency to use, and it never calls another `make*` to construct its
+collaborators — it trusts what it is given.
+
+```ts
+makeReserve({ db, logger, metrics, restaurantCfg }); // → a reserve function
+makeInMemoryDb({ logger, generateId });              // → a DB object
+makeRestaurantRouter({ restaurant });                // → an Express Router
+```
+
+**`compose*` — assemble _many_ capabilities into a working unit.**
+
+A `compose*` function is a **composition root**. It **calls `make*` factories
+to build the parts**, wires them together, and returns the assembled result. It
+is the only kind of function that constructs its own collaborators.
+
+```ts
+composeRestaurant({ db, logger, metrics, restaurantCfg }); // builds reserve/cancel/update, bundles into Restaurant
+composeServerApp({ ...deps, port });                       // builds the restaurant, wraps it in router + listen
+```
+
+**The one-question test:**
+
+> _Does this function call other `make*` / `compose*` functions to build its own
+> collaborators?_
+>
+> - **No** — it just uses what it is handed → it is a **`make*`**.
+> - **Yes** — it constructs and wires the graph → it is a **`compose*`**.
+
+**What is _not_ the deciding factor: the return type.** `makeRestaurant` and
+`composeRestaurant` both return a `Restaurant`. The difference is that
+`makeRestaurant` is _handed_ `reserve`/`cancel`/`update` ready-made and just
+bundles them, while `composeRestaurant` _manufactures_ them from raw
+infrastructure. "Do you build your own collaborators?" is the line — return
+shape is not.
+
+| | `make*` | `compose*` |
+| ----------------------------- | ----------------------------- | ----------------------------------- |
+| Receives | already-built deps (ports) | raw infrastructure + config |
+| Builds its own collaborators? | no — uses what it is handed | yes — calls `make*` |
+| Returns | one port (fn or object) | the assembled result the caller needs |
+| Lives in | domain / adapters | composition roots (`compose.ts`, `composeRestaurant.ts`) |
+| Lifetime | built once, op runs many times | runs once at startup |
+
+---
+
 ## Why this beats classes for this use case
 
 A class mixes construction and operation in the same `this`:
@@ -169,11 +225,12 @@ const makeInMemoryDb = (cfg: InMemoryDbCfg): DB => {
 const db = makeInMemoryDb({ logger, generateId });
 ```
 
-`compose*` functions return a **named bag of independent peers** — the things
-the entry point will drive:
+`compose*` functions return **whatever the caller needs** — most often a
+**named bag of independent peers** for an entry point to drive, but sometimes a
+single assembled port when the composition's job is just to build one thing:
 
 ```ts
-// compose* always returns a named object
+// Composition root for an entry point — a named bag of peers
 const composeServerApp = (cfg) => {
     // ... wiring ...
     return { listen, restaurant };
@@ -181,7 +238,13 @@ const composeServerApp = (cfg) => {
 
 const composeCliApp = (cfg) => {
     // ... wiring ...
-    return { cli, restaurant };
+    return { cli };
+};
+
+// Domain assembly reused by both entry points — a single port
+const composeRestaurant = (cfg): Restaurant => {
+    // ... builds reserve/cancel/update, bundles them ...
+    return makeRestaurant({ reserve, cancel, update, getReservations });
 };
 ```
 
@@ -203,11 +266,12 @@ const { cli } = composeCliApp({ restaurantCfg, logger, metrics, db });
 ## Where the pattern lives in this project
 
 ```text
-src/restaurant/domain/          ← business operations (pure domain logic)
-src/restaurant/ports/           ← interfaces (what each factory depends on)
-src/restaurant/adapters/             ← concrete implementations (db, http, queue)
-src/server/compose.ts     ← composition root for the HTTP server
-src/cli/compose.ts        ← composition root for the CLI
+src/restaurant/domain/                    ← business operations (pure domain logic)
+src/restaurant/domain/composeRestaurant.ts ← assembles the domain once (reused by both entry points)
+src/restaurant/ports/                     ← interfaces (what each factory depends on)
+src/restaurant/adapters/                  ← concrete implementations (db, http, queue)
+src/server/compose.ts                     ← composition root for the HTTP server
+src/cli/compose.ts                        ← composition root for the CLI
 ```
 
 Each `compose.ts` is a **composition root** — the only file for its entry

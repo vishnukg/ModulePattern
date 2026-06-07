@@ -77,23 +77,35 @@ explicitly in import paths — Node.js ESM does not auto-resolve directories.
 
 ---
 
-## 3. Composition roots — one per entry point
+## 3. Composition — assemble the domain once, wrap it per entry point
 
-Each entry point has its own **composition root** (`compose.ts`) that wires
-domain operations together for that specific context.
+The domain is wired together in exactly **one** place — `composeRestaurant` —
+which both entry points reuse. It builds each operation from its driven ports
+(`db`, `logger`, `metrics`) and bundles them into the `Restaurant` port:
 
 ```ts
-// src/server/compose.ts
-const composeServerApp = ({ restaurantCfg, logger, metrics, db, port = 3000 }: ServerAppCfg) => {
+// src/restaurant/domain/composeRestaurant.ts  — the single domain assembly
+const composeRestaurant = ({ db, logger, metrics, restaurantCfg }: ComposeRestaurantCfg): Restaurant => {
     const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
     const cancel = makeCancel({ db, logger, metrics });
     const update = makeUpdate({ db, logger, metrics, restaurantCfg });
-    const restaurant = makeRestaurant({
+    return makeRestaurant({
         reserve,
         cancel,
         update,
         getReservations: db.getReservations,
     });
+};
+```
+
+Each entry point then has a thin **composition root** (`compose.ts`) that calls
+`composeRestaurant` and wraps the result with the one thing that differs: its
+**driving adapter** (an HTTP router vs. a CLI).
+
+```ts
+// src/server/compose.ts
+const composeServerApp = ({ restaurantCfg, logger, metrics, db, port = 3000 }: ServerAppCfg) => {
+    const restaurant = composeRestaurant({ db, logger, metrics, restaurantCfg });
     const router = makeRestaurantRouter({ restaurant });
 
     const listen = () => {
@@ -110,20 +122,18 @@ const composeServerApp = ({ restaurantCfg, logger, metrics, db, port = 3000 }: S
 ```ts
 // src/cli/compose.ts
 const composeCliApp = ({ restaurantCfg, logger, metrics, db }: CliAppCfg) => {
-    const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
-    const cancel = makeCancel({ db, logger, metrics });
-    const update = makeUpdate({ db, logger, metrics, restaurantCfg });
-    const restaurant = makeRestaurant({
-        reserve,
-        cancel,
-        update,
-        getReservations: db.getReservations,
-    });
+    const restaurant = composeRestaurant({ db, logger, metrics, restaurantCfg });
     const cli = makeRestaurantCli({ restaurant });
 
-    return { cli, restaurant };
+    return { cli };
 };
 ```
+
+The domain wiring lives in `composeRestaurant`; change how operations connect
+(add one, pass a new dependency) and you edit it **once** — both entry points
+follow. What's left in each `compose*` is genuinely entry-point-specific: the
+server exposes `listen`, the CLI exposes `cli`, and the only structural
+difference between them is HTTP router vs. CLI driving adapter.
 
 `compose*` functions return a **named bag of independent peers** — the things
 the entry point needs to drive the app. The entry point (`index.ts`) owns all

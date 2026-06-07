@@ -183,17 +183,16 @@ const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
 `reserve` does not import `db` — it receives it as an argument. This means
 in tests you can pass a fake `db` without touching real infrastructure.
 
-`compose.ts` calls all the `make*` functions once at startup, wires the
-results together, and hands them to the HTTP layer:
+`composeRestaurant` calls all the domain `make*` functions once, wires the
+results into the `Restaurant` port, and each entry point's `compose.ts` reuses
+it before handing the result to its transport (HTTP or CLI):
 
 ```ts
-const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
-const cancel = makeCancel({ db, logger, metrics });
-const update = makeUpdate({ db, logger, metrics, restaurantCfg });
-const restaurant = makeRestaurant({
-    reserve,
-    cancel,
-    update,
-    getReservations: db.getReservations,
-});
+// src/restaurant/domain/composeRestaurant.ts
+const composeRestaurant = ({ db, logger, metrics, restaurantCfg }: ComposeRestaurantCfg): Restaurant => {
+    const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
+    const cancel = makeCancel({ db, logger, metrics });
+    const update = makeUpdate({ db, logger, metrics, restaurantCfg });
+    return makeRestaurant({ reserve, cancel, update, getReservations: db.getReservations });
+};
 ```

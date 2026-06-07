@@ -162,9 +162,7 @@ const db      = makeInMemoryDb({ logger, generateId: randomUUID }); // or makeDy
 
 // src/server/compose.ts — pure wiring, no defaults
 const composeServerApp = ({ restaurantCfg, logger, metrics, db, port = 3000 }: ServerAppCfg) => {
-  const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
-  const cancel  = makeCancel({ db, logger, metrics });
-  const update  = makeUpdate({ db, logger, metrics, restaurantCfg });
+  const restaurant = composeRestaurant({ db, logger, metrics, restaurantCfg });
   ...
 };
 ```
