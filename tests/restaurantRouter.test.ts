@@ -4,7 +4,7 @@ import request from "supertest";
 import makeRestaurantRouter from "../src/restaurant/adapters/http/makeRestaurantRouter.ts";
 import type { Restaurant } from "../src/restaurant/index.ts";
 
-const makeTestApp = (restaurant: Restaurant) => {
+const composeTestApp = (restaurant: Restaurant) => {
     const app = express();
     app.use(express.json());
     app.use("/api", makeRestaurantRouter({ restaurant }));
@@ -22,7 +22,7 @@ const stubRestaurant: Restaurant = {
 
 describe("POST /api/reservations — accepted", () => {
     it("returns 201 and result Accepted", async () => {
-        const response = await request(makeTestApp(stubRestaurant))
+        const response = await request(composeTestApp(stubRestaurant))
             .post("/api/reservations")
             .send({ quantity: 8, date: "12/12/25" });
 
@@ -37,7 +37,7 @@ describe("POST /api/reservations — accepted", () => {
             reserve: mockReserve,
         };
 
-        await request(makeTestApp(restaurant))
+        await request(composeTestApp(restaurant))
             .post("/api/reservations")
             .send({ quantity: 8, date: "12/12/25" });
 
@@ -55,7 +55,7 @@ describe("POST /api/reservations — rejected", () => {
             reserve: async () => "Rejected",
         };
 
-        const response = await request(makeTestApp(restaurant))
+        const response = await request(composeTestApp(restaurant))
             .post("/api/reservations")
             .send({ quantity: 15, date: "12/12/25" });
 
@@ -66,7 +66,7 @@ describe("POST /api/reservations — rejected", () => {
 
 describe("POST /api/reservations — invalid input", () => {
     it("returns 400 when quantity is not a number", async () => {
-        const response = await request(makeTestApp(stubRestaurant))
+        const response = await request(composeTestApp(stubRestaurant))
             .post("/api/reservations")
             .send({ quantity: "bad", date: "12/12/25" });
 
@@ -75,7 +75,7 @@ describe("POST /api/reservations — invalid input", () => {
     });
 
     it("returns 400 when date is not a string", async () => {
-        const response = await request(makeTestApp(stubRestaurant))
+        const response = await request(composeTestApp(stubRestaurant))
             .post("/api/reservations")
             .send({ quantity: 8, date: 999 });
 
@@ -97,14 +97,14 @@ describe("GET /api/reservations", () => {
             getReservations: async () => stored,
         };
 
-        const response = await request(makeTestApp(restaurant)).get("/api/reservations");
+        const response = await request(composeTestApp(restaurant)).get("/api/reservations");
 
         expect(response.status).toBe(200);
         expect(response.body).toEqual({ reservations: stored });
     });
 
     it("returns an empty array when no reservations exist", async () => {
-        const response = await request(makeTestApp(stubRestaurant)).get("/api/reservations");
+        const response = await request(composeTestApp(stubRestaurant)).get("/api/reservations");
 
         expect(response.status).toBe(200);
         expect(response.body).toEqual({ reservations: [] });
@@ -115,7 +115,7 @@ describe("GET /api/reservations", () => {
 
 describe("DELETE /api/reservations/:id — cancelled", () => {
     it("returns 200 and result Cancelled", async () => {
-        const response = await request(makeTestApp(stubRestaurant)).delete(
+        const response = await request(composeTestApp(stubRestaurant)).delete(
             "/api/reservations/some-id",
         );
 
@@ -130,7 +130,7 @@ describe("DELETE /api/reservations/:id — cancelled", () => {
             cancel: mockCancel,
         };
 
-        await request(makeTestApp(restaurant)).delete("/api/reservations/abc-123");
+        await request(composeTestApp(restaurant)).delete("/api/reservations/abc-123");
 
         expect(mockCancel).toHaveBeenCalledWith("abc-123");
     });
@@ -143,7 +143,7 @@ describe("DELETE /api/reservations/:id — not found", () => {
             cancel: async () => "NotFound",
         };
 
-        const response = await request(makeTestApp(restaurant)).delete(
+        const response = await request(composeTestApp(restaurant)).delete(
             "/api/reservations/no-such-id",
         );
 
@@ -156,7 +156,7 @@ describe("DELETE /api/reservations/:id — not found", () => {
 
 describe("PUT /api/reservations/:id — updated", () => {
     it("returns 200 and result Updated", async () => {
-        const response = await request(makeTestApp(stubRestaurant))
+        const response = await request(composeTestApp(stubRestaurant))
             .put("/api/reservations/some-id")
             .send({ quantity: 4, date: "25/12/25" });
 
@@ -171,7 +171,7 @@ describe("PUT /api/reservations/:id — updated", () => {
             update: mockUpdate,
         };
 
-        await request(makeTestApp(restaurant))
+        await request(composeTestApp(restaurant))
             .put("/api/reservations/abc-123")
             .send({ quantity: 4, date: "25/12/25" });
 
@@ -189,7 +189,7 @@ describe("PUT /api/reservations/:id — rejected", () => {
             update: async () => "Rejected",
         };
 
-        const response = await request(makeTestApp(restaurant))
+        const response = await request(composeTestApp(restaurant))
             .put("/api/reservations/some-id")
             .send({ quantity: 99, date: "25/12/25" });
 
@@ -205,7 +205,7 @@ describe("PUT /api/reservations/:id — not found", () => {
             update: async () => "NotFound",
         };
 
-        const response = await request(makeTestApp(restaurant))
+        const response = await request(composeTestApp(restaurant))
             .put("/api/reservations/no-such-id")
             .send({ quantity: 4, date: "25/12/25" });
 
@@ -216,7 +216,7 @@ describe("PUT /api/reservations/:id — not found", () => {
 
 describe("PUT /api/reservations/:id — invalid input", () => {
     it("returns 400 when quantity is not a number", async () => {
-        const response = await request(makeTestApp(stubRestaurant))
+        const response = await request(composeTestApp(stubRestaurant))
             .put("/api/reservations/some-id")
             .send({ quantity: "bad", date: "25/12/25" });
 

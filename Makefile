@@ -17,7 +17,7 @@ PORT    ?= 3000
 
 .DEFAULT_GOAL := help
 
-.PHONY: help deps typecheck lint test build fmt fmt-check ci \
+.PHONY: help deps typecheck lint audit test build fmt fmt-check ci \
         cli server server-dynamo up setup down clean
 
 help: ## Show this help
@@ -35,6 +35,9 @@ typecheck: ## Type-check with tsc
 lint: ## Lint with eslint
 	$(RUN) npm run lint
 
+audit: ## Audit make*/compose* factory naming
+	$(RUN) npm run audit
+
 test: ## Run the test suite with coverage
 	$(RUN) npm test
 
@@ -47,7 +50,7 @@ fmt: ## Format the codebase with prettier (writes)
 fmt-check: ## Verify formatting without writing
 	$(RUN) npm run format:check
 
-ci: deps typecheck lint test build ## Everything CI runs, from a clean checkout
+ci: deps typecheck lint audit test build ## Everything CI runs, from a clean checkout
 
 # ── Run the app (containerised) ──────────────────────────────────────────────
 

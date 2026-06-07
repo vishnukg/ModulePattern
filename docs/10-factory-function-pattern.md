@@ -53,59 +53,71 @@ This separates two very different concerns:
 
 ---
 
-## `make*` vs `compose*` — which one am I writing?
+## make vs compose: when to use which
 
-Both are factories (functions that return things), but they sit at different
-layers and answer different questions. Getting this distinction right is what
-keeps the codebase navigable.
+Both `make*` and `compose*` are factory functions — you call them once at
+startup and they return something you use later. The prefix tells you the
+function's **job**. Here is the entire rule.
 
-**`make*` — build _one_ capability from dependencies you are handed.**
+**`make*` = manufacture ONE thing.**
+A `make*` takes its dependencies (already built) and returns a single **port** —
+one function, or one object that implements one interface. It writes its logic
+**inline**; it does not call other factories to assemble itself. It is a *leaf*:
+the place a capability is actually defined.
 
-A `make*` factory receives its dependencies **already built** and returns a
-single **port**: a function (single-operation port) or an object (multi-method
-port). It does the work of exactly one thing. It never decides _which_ concrete
-dependency to use, and it never calls another `make*` to construct its
-collaborators — it trusts what it is given.
+**`compose*` = assemble things that already exist.**
+A `compose*` **calls other factories** (`make*`, and sometimes other `compose*`)
+and/or **chooses which concrete adapter to use**, then wires the results
+together. It defines no new behaviour of its own — it connects behaviour that
+`make*` functions already provide. It is a *branch*.
 
-```ts
-makeReserve({ db, logger, metrics, restaurantCfg }); // → a reserve function
-makeInMemoryDb({ logger, generateId });              // → a DB object
-makeRestaurantRouter({ restaurant });                // → an Express Router
-```
+### The one test that decides it
 
-**`compose*` — assemble _many_ capabilities into a working unit.**
+Open the function body and ask:
 
-A `compose*` function is a **composition root**. It **calls `make*` factories
-to build the parts**, wires them together, and returns the assembled result. It
-is the only kind of function that constructs its own collaborators.
-
-```ts
-composeRestaurant({ db, logger, metrics, restaurantCfg }); // builds reserve/cancel/update, bundles into Restaurant
-composeServerApp({ ...deps, port });                       // builds the restaurant, wraps it in router + listen
-```
-
-**The one-question test:**
-
-> _Does this function call other `make*` / `compose*` functions to build its own
-> collaborators?_
+> **Does it call another factory (`make*` / `compose*`) to build one of its parts?**
 >
-> - **No** — it just uses what it is handed → it is a **`make*`**.
-> - **Yes** — it constructs and wires the graph → it is a **`compose*`**.
+> - **No** → it's a **`make*`**. (Its work is written inline.)
+> - **Yes** → it's a **`compose*`**. (It assembles other factories.)
 
-**What is _not_ the deciding factor: the return type.** `makeRestaurant` and
-`composeRestaurant` both return a `Restaurant`. The difference is that
-`makeRestaurant` is _handed_ `reserve`/`cancel`/`update` ready-made and just
-bundles them, while `composeRestaurant` _manufactures_ them from raw
-infrastructure. "Do you build your own collaborators?" is the line — return
-shape is not.
+That is the whole rule. The **return type does not matter**: a `compose*` may
+return a single named port (when it just assembles one domain) or a bag of peers
+(when it's an entry point's root). What makes it a compose is *calling other
+factories*, not what it returns.
 
-| | `make*` | `compose*` |
-| ----------------------------- | ----------------------------- | ----------------------------------- |
-| Receives | already-built deps (ports) | raw infrastructure + config |
-| Builds its own collaborators? | no — uses what it is handed | yes — calls `make*` |
-| Returns | one port (fn or object) | the assembled result the caller needs |
-| Lives in | domain / adapters | composition roots (`compose.ts`, `composeRestaurant.ts`) |
-| Lifetime | built once, op runs many times | runs once at startup |
+The clearest proof is `makeRestaurant` vs `composeRestaurant` — **both return a
+`Restaurant`**, yet:
+
+```ts
+// make: it is HANDED the operations and just bundles them → calls no factory
+const makeRestaurant = ({ reserve, cancel, update, getReservations }): Restaurant =>
+  ({ reserve, cancel, update, getReservations });
+
+// compose: it BUILDS the operations via make* factories, then bundles them
+const composeRestaurant = ({ db, logger, metrics, restaurantCfg }): Restaurant => {
+  const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
+  const cancel  = makeCancel({ db, logger, metrics });
+  const update  = makeUpdate({ db, logger, metrics, restaurantCfg });
+  return makeRestaurant({ reserve, cancel, update, getReservations: db.getReservations });
+};
+```
+
+### This repo, function by function
+
+| Function | Kind | Why |
+| --- | --- | --- |
+| `makeReserve`, `makeCancel`, `makeUpdate` | `make*` | define the operation inline from `db`/`logger`/`metrics` |
+| `makeRestaurant` | `make*` | bundles operations it is **handed** — calls no factory |
+| `makeInMemoryDb`, `makeRestaurantRouter`, `makeRestaurantCli`, … | `make*` | define their behaviour inline |
+| `composeRestaurant` | `compose*` | calls `makeReserve` / `makeCancel` / `makeUpdate` / `makeRestaurant` |
+| `composeServerApp`, `composeCliApp` | `compose*` | call `composeRestaurant` + a driving adapter, return a bag of peers |
+
+### A third kind: plain functions
+
+Not every function is a factory. A function that takes data and returns data — a
+transform, a formatter, a validator — is just an ordinary function. Don't give
+it a `make*` / `compose*` prefix. Those prefixes are **only** for the wiring
+layer: building and connecting the ports your app depends on.
 
 ---
 
