@@ -119,6 +119,15 @@ transform, a formatter, a validator — is just an ordinary function. Don't give
 it a `make*` / `compose*` prefix. Those prefixes are **only** for the wiring
 layer: building and connecting the ports your app depends on.
 
+### This rule is enforced, not just documented
+
+`npm run audit` (`scripts/audit-factories.mjs`) scans every `.ts` file and fails
+the build if a `make*` builds a collaborator (it should be `compose*`) or a
+`compose*` builds nothing (it should be `make*`). It runs in CI via `make ci`.
+The script exists because this boundary is otherwise kept only by discipline —
+see [When to choose something else](#when-to-choose-something-else) for patterns
+that move the same guarantee into the compiler instead.
+
 ---
 
 ## Why this beats classes for this use case
@@ -309,6 +318,91 @@ the composition root and trace every dependency.
 service-level objects created once at startup this is irrelevant. For
 factories called thousands of times per second to create short-lived objects,
 prefer plain functions with explicit arguments instead.
+
+---
+
+## When to choose something else
+
+This pattern — factory functions plus a hand-written composition root — is the
+right default for small-to-medium apps that value clarity and zero magic. But it
+is one point on a spectrum, and it has real costs: manual wiring grows linearly
+with the app, and the make/compose split is a _convention_ you must keep honest
+(which is why this repo ships an [audit](#this-rule-is-enforced-not-just-documented)).
+Here is the spectrum, simplest → heaviest:
+
+| Approach | vs. this repo | Choose it when |
+| --- | --- | --- |
+| **Plain functions, deps as params** — `reserve(deps, input)` | drops the factory/closure layer entirely | the app is tiny or the logic is mostly pure; you want the least machinery |
+| **Factory functions + manual compose** _(this repo)_ | — | small-to-medium apps; clarity and traceability matter most |
+| **One typed `deps` bag threaded through** | a single `AppDeps` object instead of per-factory configs | wiring churn hurts — but you accept weaker "visible dependencies at the boundary" |
+| **Effect-TS `Layer`s (or fp-ts `Reader`)** | a _compiler-checked_ composition root, plus typed errors/resources | you want the type system to prove the graph is wired |
+| **DI container (NestJS, tsyringe)** | decorators auto-wire at runtime | a large team/app where manual wiring is genuinely too much, and you accept reflection + runtime wiring errors |
+
+The honest weakness of _this_ pattern: the make/compose boundary is enforced by
+discipline, not the compiler. A wiring mistake — a domain function that quietly
+constructs its own database — is just code that runs. The `npm run audit` script
+narrows that gap for the _naming_ rule, but it cannot prove the _graph_ is
+correct. The next patterns up the ladder move that guarantee into the type system.
+
+## How Effect-TS would do this
+
+Effect-TS is essentially "this pattern, leveled up" — the same ports / adapters /
+composition-root ideas, but the **compiler tracks the dependency graph for you**.
+The mapping is almost one-to-one:
+
+| This repo | Effect-TS |
+| --- | --- |
+| a port (`DB`, `Logger` interface) | a `Context.Tag` — a typed key identifying a service |
+| a `make*` adapter | a value provided through a `Layer` |
+| a `compose*` / composition root | `Layer` composition (`Layer.provide` / `Layer.merge`) |
+| the domain op (`reserve`) | an `Effect<A, E, R>` — `R` is the set of services it needs |
+| `index.ts` running the app | `Effect.runPromise(program.pipe(Effect.provide(AppLive)))` |
+
+A sketch of our `reserve` in Effect:
+
+```ts
+import { Context, Effect, Layer } from "effect";
+
+// A port becomes a Tag — a typed token for a service.
+class Db extends Context.Tag("Db")<Db, {
+  saveReservation: (input: ReservationInput) => Effect.Effect<Reservation>;
+}>() {}
+
+// The domain reads services from context instead of taking a config object.
+// Its type carries the dependency: Effect<Reservation, never, Db>.
+const reserve = (input: ReservationInput) =>
+  Effect.gen(function* () {
+    const db = yield* Db;                 // ← dependency, tracked in the type
+    return yield* db.saveReservation(input);
+  });
+
+// An adapter is provided as a Layer (this fuses make* with the wiring step).
+const DbLive = Layer.succeed(Db, {
+  saveReservation: (input) => Effect.succeed({ id: "r1", ...input }),
+});
+
+// The composition root is just Layer composition.
+const AppLive = DbLive; // .pipe(Layer.provideMerge(LoggerLive)), etc.
+
+// Running provides the layers. Forget one and it does NOT compile.
+Effect.runPromise(reserve(input).pipe(Effect.provide(AppLive)));
+```
+
+What you gain over the manual approach:
+
+- **The dependency graph is type-checked.** `reserve`'s type is
+  `Effect<…, …, Db>`; that `Db` in the third slot is an _unmet_ dependency, and
+  `Effect.provide` discharges it. Forget to provide a service and it won't
+  compile — exactly the guarantee our `audit` script can only _approximate_.
+- **Resources and lifetimes are built in.** `Layer` handles acquire/release
+  (connections, files) and memoizes services (singletons) — no "singleton by
+  convention".
+- **Typed errors and concurrency.** The `E` channel puts failures in the type,
+  and Effect has first-class structured concurrency and interruption.
+
+The cost is real: a steep learning curve, and the _whole_ app adopts the `Effect`
+type. For a learning repo it's a "later" tool — but when manual wiring starts to
+ache, `Layer` is the principled next step, **not** a decorator-based container.
 
 ---
 
