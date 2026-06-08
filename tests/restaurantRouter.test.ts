@@ -1,14 +1,15 @@
 import { describe, it, expect, vi } from "vitest";
-import express from "express";
 import request from "supertest";
 import makeRestaurantRouter from "../src/restaurant/adapters/http/makeRestaurantRouter.ts";
+import makeRestaurantServer from "../src/restaurant/adapters/http/makeRestaurantServer.ts";
+import makeSilentLogger from "./helpers/silentLogger.ts";
 import type { Restaurant } from "../src/restaurant/index.ts";
+import type { Logger } from "../src/restaurant/index.ts";
 
-const composeTestApp = (restaurant: Restaurant) => {
-    const app = express();
-    app.use(express.json());
-    app.use("/api", makeRestaurantRouter({ restaurant }));
-    return app;
+// Uses the real server (with error middleware) so 500 paths are exercised correctly.
+const composeTestApp = (restaurant: Restaurant, logger: Logger = makeSilentLogger()) => {
+    const router = makeRestaurantRouter({ restaurant });
+    return makeRestaurantServer({ router, logger });
 };
 
 const stubRestaurant: Restaurant = {
@@ -222,5 +223,151 @@ describe("PUT /api/reservations/:id — invalid input", () => {
 
         expect(response.status).toBe(400);
         expect(response.body).toHaveProperty("error");
+    });
+});
+
+// ─── Stricter input validation ────────────────────────────────────────────────
+
+describe("POST /api/reservations — stricter validation", () => {
+    it("returns 400 when quantity is zero", async () => {
+        const response = await request(composeTestApp(stubRestaurant))
+            .post("/api/reservations")
+            .send({ quantity: 0, date: "12/12/25" });
+
+        expect(response.status).toBe(400);
+        expect(response.body).toHaveProperty("error");
+    });
+
+    it("returns 400 when quantity is negative", async () => {
+        const response = await request(composeTestApp(stubRestaurant))
+            .post("/api/reservations")
+            .send({ quantity: -1, date: "12/12/25" });
+
+        expect(response.status).toBe(400);
+        expect(response.body).toHaveProperty("error");
+    });
+
+    it("returns 400 when quantity is a float", async () => {
+        const response = await request(composeTestApp(stubRestaurant))
+            .post("/api/reservations")
+            .send({ quantity: 1.5, date: "12/12/25" });
+
+        expect(response.status).toBe(400);
+        expect(response.body).toHaveProperty("error");
+    });
+
+    it("returns 400 when date is an empty string", async () => {
+        const response = await request(composeTestApp(stubRestaurant))
+            .post("/api/reservations")
+            .send({ quantity: 4, date: "" });
+
+        expect(response.status).toBe(400);
+        expect(response.body).toHaveProperty("error");
+    });
+
+    it("returns 400 when date is a whitespace-only string", async () => {
+        const response = await request(composeTestApp(stubRestaurant))
+            .post("/api/reservations")
+            .send({ quantity: 4, date: "   " });
+
+        expect(response.status).toBe(400);
+        expect(response.body).toHaveProperty("error");
+    });
+});
+
+describe("PUT /api/reservations/:id — stricter validation", () => {
+    it("returns 400 when quantity is zero", async () => {
+        const response = await request(composeTestApp(stubRestaurant))
+            .put("/api/reservations/some-id")
+            .send({ quantity: 0, date: "25/12/25" });
+
+        expect(response.status).toBe(400);
+        expect(response.body).toHaveProperty("error");
+    });
+
+    it("returns 400 when quantity is a float", async () => {
+        const response = await request(composeTestApp(stubRestaurant))
+            .put("/api/reservations/some-id")
+            .send({ quantity: 2.5, date: "25/12/25" });
+
+        expect(response.status).toBe(400);
+        expect(response.body).toHaveProperty("error");
+    });
+
+    it("returns 400 when date is an empty string", async () => {
+        const response = await request(composeTestApp(stubRestaurant))
+            .put("/api/reservations/some-id")
+            .send({ quantity: 4, date: "" });
+
+        expect(response.status).toBe(400);
+        expect(response.body).toHaveProperty("error");
+    });
+});
+
+// ─── Infrastructure errors → 500 ─────────────────────────────────────────────
+
+const makeThrowingRestaurant = (method: keyof Restaurant): Restaurant => ({
+    ...stubRestaurant,
+    [method]: async () => {
+        throw new Error("db unavailable");
+    },
+});
+
+describe("POST /api/reservations — infrastructure error", () => {
+    it("returns 500 when restaurant.reserve throws", async () => {
+        const response = await request(composeTestApp(makeThrowingRestaurant("reserve")))
+            .post("/api/reservations")
+            .send({ quantity: 4, date: "12/12/25" });
+
+        expect(response.status).toBe(500);
+        expect(response.body).toEqual({ error: "Internal server error" });
+    });
+
+    it("calls logger.error when restaurant.reserve throws", async () => {
+        const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+        const response = await request(
+            composeTestApp(makeThrowingRestaurant("reserve"), mockLogger),
+        )
+            .post("/api/reservations")
+            .send({ quantity: 4, date: "12/12/25" });
+
+        expect(response.status).toBe(500);
+        expect(mockLogger.error).toHaveBeenCalledWith(
+            "request failed",
+            expect.objectContaining({ method: "POST", path: "/api/reservations" }),
+        );
+    });
+});
+
+describe("GET /api/reservations — infrastructure error", () => {
+    it("returns 500 when restaurant.getReservations throws", async () => {
+        const response = await request(
+            composeTestApp(makeThrowingRestaurant("getReservations")),
+        ).get("/api/reservations");
+
+        expect(response.status).toBe(500);
+        expect(response.body).toEqual({ error: "Internal server error" });
+    });
+});
+
+describe("DELETE /api/reservations/:id — infrastructure error", () => {
+    it("returns 500 when restaurant.cancel throws", async () => {
+        const response = await request(
+            composeTestApp(makeThrowingRestaurant("cancel")),
+        ).delete("/api/reservations/some-id");
+
+        expect(response.status).toBe(500);
+        expect(response.body).toEqual({ error: "Internal server error" });
+    });
+});
+
+describe("PUT /api/reservations/:id — infrastructure error", () => {
+    it("returns 500 when restaurant.update throws", async () => {
+        const response = await request(composeTestApp(makeThrowingRestaurant("update")))
+            .put("/api/reservations/some-id")
+            .send({ quantity: 4, date: "25/12/25" });
+
+        expect(response.status).toBe(500);
+        expect(response.body).toEqual({ error: "Internal server error" });
     });
 });

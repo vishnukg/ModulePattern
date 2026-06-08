@@ -142,6 +142,70 @@ describe("makeUpdate — logging", () => {
     });
 });
 
+describe("makeUpdate — db error", () => {
+    const dbError = new Error("connection refused");
+    const failingDb: DB = {
+        ...stubDb,
+        updateReservation: async () => {
+            throw dbError;
+        },
+    };
+
+    it("re-throws when db.updateReservation throws", async () => {
+        const update = makeUpdate({
+            db: failingDb,
+            restaurantCfg: { tableSize: 10 },
+            logger: stubLogger,
+            metrics: stubMetrics,
+        });
+        await expect(update("any-id", { quantity: 4, date: "25/12/12" })).rejects.toThrow(
+            "connection refused",
+        );
+    });
+
+    it("calls logger.error when db.updateReservation throws", async () => {
+        const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+        const update = makeUpdate({
+            db: failingDb,
+            restaurantCfg: { tableSize: 10 },
+            logger: mockLogger,
+            metrics: stubMetrics,
+        });
+        await expect(update("any-id", { quantity: 4, date: "25/12/12" })).rejects.toThrow();
+        expect(mockLogger.error).toHaveBeenCalledWith(
+            "db error updating reservation",
+            expect.objectContaining({ id: "any-id", message: "connection refused" }),
+        );
+    });
+
+    it("increments reservation.update.error metric when db.updateReservation throws", async () => {
+        const mockMetrics = { increment: vi.fn(), timing: vi.fn() };
+        const update = makeUpdate({
+            db: failingDb,
+            restaurantCfg: { tableSize: 10 },
+            logger: stubLogger,
+            metrics: mockMetrics,
+        });
+        await expect(update("any-id", { quantity: 4, date: "25/12/12" })).rejects.toThrow();
+        expect(mockMetrics.increment).toHaveBeenCalledWith("reservation.update.error");
+    });
+
+    it("records a timing even when db.updateReservation throws", async () => {
+        const mockMetrics = { increment: vi.fn(), timing: vi.fn() };
+        const update = makeUpdate({
+            db: failingDb,
+            restaurantCfg: { tableSize: 10 },
+            logger: stubLogger,
+            metrics: mockMetrics,
+        });
+        await expect(update("any-id", { quantity: 4, date: "25/12/12" })).rejects.toThrow();
+        expect(mockMetrics.timing).toHaveBeenCalledWith(
+            "reservation.update_ms",
+            expect.any(Number),
+        );
+    });
+});
+
 describe("makeUpdate — metrics", () => {
     it("increments reservation.update.accepted on success", async () => {
         const mockMetrics = { increment: vi.fn(), timing: vi.fn() };

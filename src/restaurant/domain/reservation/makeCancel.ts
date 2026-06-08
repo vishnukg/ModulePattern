@@ -8,7 +8,19 @@ const makeCancel = ({ db, logger, metrics }: CancelCfg): CancelFn => {
         const start = Date.now();
         logger.info("cancellation attempt", { id });
 
-        const found = await db.cancelReservation(id);
+        let found: boolean;
+        try {
+            found = await db.cancelReservation(id);
+        } catch (err) {
+            metrics.increment("reservation.cancel.error");
+            metrics.timing("reservation.cancel_ms", Date.now() - start);
+            logger.error("db error cancelling reservation", {
+                id,
+                message: err instanceof Error ? err.message : String(err),
+            });
+            throw err;
+        }
+
         metrics.timing("reservation.cancel_ms", Date.now() - start);
 
         if (!found) {

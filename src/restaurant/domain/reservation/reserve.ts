@@ -17,7 +17,18 @@ const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg): Reserv
         logger.info("reservation attempt", { quantity, date });
 
         if (quantity <= restaurantCfg.tableSize) {
-            await db.saveReservation({ quantity, date });
+            try {
+                await db.saveReservation({ quantity, date });
+            } catch (err) {
+                metrics.increment("reservation.error");
+                metrics.timing("reservation.duration_ms", Date.now() - start);
+                logger.error("db error saving reservation", {
+                    quantity,
+                    date,
+                    message: err instanceof Error ? err.message : String(err),
+                });
+                throw err;
+            }
             metrics.increment("reservation.accepted");
             metrics.timing("reservation.duration_ms", Date.now() - start);
             logger.info("reservation accepted", { quantity, date });

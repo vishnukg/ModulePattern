@@ -26,7 +26,7 @@ const composeRestaurant = ({
     const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
     const cancel = makeCancel({ db, logger, metrics });
     const update = makeUpdate({ db, logger, metrics, restaurantCfg });
-    const getReservations = makeGetReservations({ db });
+    const getReservations = makeGetReservations({ db, logger, metrics });
     return makeRestaurant({ reserve, cancel, update, getReservations });
 };
 

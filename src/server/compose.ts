@@ -14,7 +14,7 @@ type ServerAppCfg = {
 const composeServerApp = ({ restaurantCfg, logger, metrics, db, port = 3000 }: ServerAppCfg) => {
     const restaurant = composeRestaurant({ db, logger, metrics, restaurantCfg });
     const router = makeRestaurantRouter({ restaurant });
-    const app = makeRestaurantServer({ router });
+    const app = makeRestaurantServer({ router, logger });
 
     const listen = (onReady: (port: number) => void) => {
         const server = app.listen(port, () => onReady(port));

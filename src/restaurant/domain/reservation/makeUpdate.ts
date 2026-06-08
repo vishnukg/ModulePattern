@@ -27,7 +27,20 @@ const makeUpdate = ({ db, restaurantCfg, logger, metrics }: UpdateCfg): UpdateFn
             return "Rejected";
         }
 
-        const updated = await db.updateReservation(id, input);
+        let updated: Awaited<ReturnType<typeof db.updateReservation>>;
+        try {
+            updated = await db.updateReservation(id, input);
+        } catch (err) {
+            metrics.increment("reservation.update.error");
+            metrics.timing("reservation.update_ms", Date.now() - start);
+            logger.error("db error updating reservation", {
+                id,
+                ...input,
+                message: err instanceof Error ? err.message : String(err),
+            });
+            throw err;
+        }
+
         metrics.timing("reservation.update_ms", Date.now() - start);
 
         if (updated === null) {

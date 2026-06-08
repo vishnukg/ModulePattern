@@ -14,6 +14,20 @@ const tableSize = Number(process.env.TABLE_SIZE ?? 10);
 const logger = makeConsoleLogger();
 const metrics = makeNoOpMetrics();
 
+// Safety net for any promise rejection or thrown error that escapes all
+// other boundaries. Log it, then exit so the process manager can restart cleanly.
+process.on("unhandledRejection", (reason) => {
+    logger.error("unhandled rejection", {
+        message: reason instanceof Error ? reason.message : String(reason),
+    });
+    process.exit(1);
+});
+
+process.on("uncaughtException", (err) => {
+    logger.error("uncaught exception", { message: err.message });
+    process.exit(1);
+});
+
 const db: DB = (() => {
     if (!process.env.DYNAMODB_TABLE) return makeInMemoryDb({ logger, generateId: randomUUID });
     const region = process.env.AWS_REGION ?? "us-east-1";

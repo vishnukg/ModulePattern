@@ -27,6 +27,13 @@ const metrics = makeNoOpMetrics();
 const db = makeInMemoryDb({ logger, generateId: randomUUID });
 
 const { cli } = composeCliApp({ restaurantCfg: { tableSize: seats }, logger, metrics, db });
-const message = await cli.reserve({ quantity, date }, seats);
 
-console.log(message);
+try {
+    const message = await cli.reserve({ quantity, date }, seats);
+    console.log(message);
+} catch (err) {
+    logger.error("operation failed", {
+        message: err instanceof Error ? err.message : String(err),
+    });
+    process.exit(1);
+}

@@ -81,6 +81,48 @@ describe("makeCancel — logging", () => {
     });
 });
 
+describe("makeCancel — db error", () => {
+    const dbError = new Error("connection refused");
+    const failingDb: DB = {
+        ...stubDb,
+        cancelReservation: async () => {
+            throw dbError;
+        },
+    };
+
+    it("re-throws when db.cancelReservation throws", async () => {
+        const cancel = makeCancel({ db: failingDb, logger: stubLogger, metrics: stubMetrics });
+        await expect(cancel("any-id")).rejects.toThrow("connection refused");
+    });
+
+    it("calls logger.error when db.cancelReservation throws", async () => {
+        const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+        const cancel = makeCancel({ db: failingDb, logger: mockLogger, metrics: stubMetrics });
+        await expect(cancel("any-id")).rejects.toThrow();
+        expect(mockLogger.error).toHaveBeenCalledWith(
+            "db error cancelling reservation",
+            expect.objectContaining({ id: "any-id", message: "connection refused" }),
+        );
+    });
+
+    it("increments reservation.cancel.error metric when db.cancelReservation throws", async () => {
+        const mockMetrics = { increment: vi.fn(), timing: vi.fn() };
+        const cancel = makeCancel({ db: failingDb, logger: stubLogger, metrics: mockMetrics });
+        await expect(cancel("any-id")).rejects.toThrow();
+        expect(mockMetrics.increment).toHaveBeenCalledWith("reservation.cancel.error");
+    });
+
+    it("records a timing even when db.cancelReservation throws", async () => {
+        const mockMetrics = { increment: vi.fn(), timing: vi.fn() };
+        const cancel = makeCancel({ db: failingDb, logger: stubLogger, metrics: mockMetrics });
+        await expect(cancel("any-id")).rejects.toThrow();
+        expect(mockMetrics.timing).toHaveBeenCalledWith(
+            "reservation.cancel_ms",
+            expect.any(Number),
+        );
+    });
+});
+
 describe("makeCancel — metrics", () => {
     it("increments reservation.cancelled on success", async () => {
         const mockMetrics = { increment: vi.fn(), timing: vi.fn() };

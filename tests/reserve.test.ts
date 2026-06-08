@@ -125,6 +125,68 @@ describe("reserve — logging", () => {
     });
 });
 
+describe("reserve — db error", () => {
+    const dbError = new Error("connection refused");
+    const failingDb: DB = {
+        ...stubDb,
+        saveReservation: async () => {
+            throw dbError;
+        },
+    };
+
+    it("re-throws when db.saveReservation throws", async () => {
+        const reserve = makeReserve({
+            db: failingDb,
+            restaurantCfg: { tableSize: 10 },
+            logger: stubLogger,
+            metrics: stubMetrics,
+        });
+        await expect(reserve({ quantity: 8, date: "12/12/12" })).rejects.toThrow("connection refused");
+    });
+
+    it("calls logger.error when db.saveReservation throws", async () => {
+        const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+        const reserve = makeReserve({
+            db: failingDb,
+            restaurantCfg: { tableSize: 10 },
+            logger: mockLogger,
+            metrics: stubMetrics,
+        });
+        await expect(reserve({ quantity: 8, date: "12/12/12" })).rejects.toThrow();
+        expect(mockLogger.error).toHaveBeenCalledWith(
+            "db error saving reservation",
+            expect.objectContaining({ message: "connection refused" }),
+        );
+    });
+
+    it("increments reservation.error metric when db.saveReservation throws", async () => {
+        const mockMetrics = { increment: vi.fn(), timing: vi.fn() };
+        const reserve = makeReserve({
+            db: failingDb,
+            restaurantCfg: { tableSize: 10 },
+            logger: stubLogger,
+            metrics: mockMetrics,
+        });
+        await expect(reserve({ quantity: 8, date: "12/12/12" })).rejects.toThrow();
+        expect(mockMetrics.increment).toHaveBeenCalledWith("reservation.error");
+    });
+
+    it("records a timing even when db.saveReservation throws", async () => {
+        const mockMetrics = { increment: vi.fn(), timing: vi.fn() };
+        const reserve = makeReserve({
+            db: failingDb,
+            restaurantCfg: { tableSize: 10 },
+            logger: stubLogger,
+            metrics: mockMetrics,
+        });
+        await expect(reserve({ quantity: 8, date: "12/12/12" })).rejects.toThrow();
+        expect(mockMetrics.timing).toHaveBeenCalledWith(
+            "reservation.duration_ms",
+            expect.any(Number),
+        );
+    });
+});
+
 describe("reserve — metrics", () => {
     it("increments reservation.accepted on acceptance", async () => {
         const mockMetrics = { increment: vi.fn(), timing: vi.fn() };

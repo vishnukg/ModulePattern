@@ -225,3 +225,101 @@ it("records a timing for every attempt regardless of outcome", async () => {
     expect(metrics.getTimings("reservation.duration_ms")).toHaveLength(2);
 });
 ```
+
+---
+
+## 7. Error handling
+
+Production systems distinguish two kinds of failures:
+
+- **Business failures** — the request was valid but the domain said no. `"Rejected"`,
+  `"NotFound"` etc. These are returned as typed values. No exceptions, no surprises.
+- **Infrastructure failures** — the DB is down, the network timed out, an AWS call
+  throttled. These are unexpected; they throw.
+
+Each pattern has its own handling layer.
+
+### Business failures (typed results)
+
+Domain operations return a discriminated union instead of throwing:
+
+```ts
+// "Accepted" | "Rejected", "Cancelled" | "NotFound", "Updated" | "Rejected" | "NotFound"
+const result = await restaurant.reserve({ quantity, date });
+```
+
+The HTTP adapter maps these cleanly to status codes with no try/catch needed:
+
+```ts
+res.status(result === "Accepted" ? 201 : 422).json({ result });
+```
+
+### Infrastructure failures (thrown errors)
+
+Domain operations wrap every DB call in a try/catch. On failure they:
+1. Increment an error metric (`reservation.error`, `reservation.cancel.error`, …)
+2. Record a timing so dashboards stay accurate even on the error path
+3. Call `logger.error` with the operation context (id, quantity, date, message)
+4. Re-throw so the error propagates to the transport layer
+
+```ts
+try {
+    await db.saveReservation({ quantity, date });
+} catch (err) {
+    metrics.increment("reservation.error");
+    metrics.timing("reservation.duration_ms", Date.now() - start);
+    logger.error("db error saving reservation", {
+        quantity,
+        date,
+        message: err instanceof Error ? err.message : String(err),
+    });
+    throw err;
+}
+```
+
+### HTTP error boundary
+
+`makeRestaurantServer` registers Express error middleware after the router.
+Route handlers use `asyncHandler` to forward any thrown error to it:
+
+```ts
+// asyncHandler in makeRestaurantRouter.ts
+const asyncHandler = (fn) => (req, res, next) => fn(req, res, next).catch(next);
+
+// Error middleware in makeRestaurantServer.ts
+app.use((err, req, res, _next) => {
+    logger.error("request failed", {
+        method: req.method,
+        path: req.path,
+        message: err instanceof Error ? err.message : String(err),
+    });
+    res.status(500).json({ error: "Internal server error" });
+});
+```
+
+Two log lines appear for every infrastructure failure — one from the domain
+(with operation context) and one from the middleware (with HTTP context). They
+complement each other: the domain log tells you what failed; the middleware log
+tells you which request triggered it.
+
+The client always receives `{ error: "Internal server error" }`. Internal
+details are never leaked in the response.
+
+### Process-level safety net
+
+`server/index.ts` registers `unhandledRejection` and `uncaughtException`
+handlers before the server starts. Any rejection that escapes every other
+boundary is logged and causes a clean `process.exit(1)` so the process
+manager (Docker, Kubernetes, PM2) can restart the service rather than leaving
+it in an unknown state.
+
+### Input validation
+
+The HTTP router validates inputs at the boundary before the domain ever sees them:
+
+- `quantity` must be a positive integer (not zero, not negative, not a float)
+- `date` must be a non-empty, non-whitespace string
+
+Invalid input returns `400` immediately. The domain only receives data that has
+already passed this check, which means domain code never needs defensive guards
+against obviously-wrong inputs.
