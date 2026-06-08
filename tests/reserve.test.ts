@@ -1,7 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
-import { makeReserve } from "../src/restaurant/index.ts";
+import { makeRestaurant } from "../src/restaurant/index.ts";
 import type { DB } from "../src/restaurant/index.ts";
 import type { Logger, Metrics } from "../src/restaurant/index.ts";
+
+// reserve is a method of Restaurant — each test builds a restaurant from its deps
+// and destructures the one operation under test.
 
 // Stubs — plain objects used when the test does not care about the interaction.
 const stubDb: DB = {
@@ -15,7 +18,7 @@ const stubMetrics: Metrics = { increment: () => {}, timing: () => {} };
 
 describe("reserve — business logic", () => {
     it("returns Accepted when quantity is below table size", async () => {
-        const reserve = makeReserve({
+        const { reserve } = makeRestaurant({
             db: stubDb,
             restaurantCfg: { tableSize: 10 },
             logger: stubLogger,
@@ -25,7 +28,7 @@ describe("reserve — business logic", () => {
     });
 
     it("returns Accepted when quantity exactly equals table size", async () => {
-        const reserve = makeReserve({
+        const { reserve } = makeRestaurant({
             db: stubDb,
             restaurantCfg: { tableSize: 10 },
             logger: stubLogger,
@@ -35,7 +38,7 @@ describe("reserve — business logic", () => {
     });
 
     it("returns Rejected when quantity exceeds table size", async () => {
-        const reserve = makeReserve({
+        const { reserve } = makeRestaurant({
             db: stubDb,
             restaurantCfg: { tableSize: 10 },
             logger: stubLogger,
@@ -56,7 +59,7 @@ describe("reserve — db interaction", () => {
             cancelReservation: async () => true,
             updateReservation: async () => null,
         };
-        const reserve = makeReserve({
+        const { reserve } = makeRestaurant({
             db: mockDb,
             restaurantCfg: { tableSize: 10 },
             logger: stubLogger,
@@ -81,7 +84,7 @@ describe("reserve — db interaction", () => {
             cancelReservation: async () => true,
             updateReservation: async () => null,
         };
-        const reserve = makeReserve({
+        const { reserve } = makeRestaurant({
             db: mockDb,
             restaurantCfg: { tableSize: 10 },
             logger: stubLogger,
@@ -97,7 +100,7 @@ describe("reserve — db interaction", () => {
 describe("reserve — logging", () => {
     it("calls logger.info on acceptance, never logger.warn", async () => {
         const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-        const reserve = makeReserve({
+        const { reserve } = makeRestaurant({
             db: stubDb,
             restaurantCfg: { tableSize: 10 },
             logger: mockLogger,
@@ -112,7 +115,7 @@ describe("reserve — logging", () => {
 
     it("calls logger.warn on rejection", async () => {
         const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-        const reserve = makeReserve({
+        const { reserve } = makeRestaurant({
             db: stubDb,
             restaurantCfg: { tableSize: 10 },
             logger: mockLogger,
@@ -135,18 +138,20 @@ describe("reserve — db error", () => {
     };
 
     it("re-throws when db.saveReservation throws", async () => {
-        const reserve = makeReserve({
+        const { reserve } = makeRestaurant({
             db: failingDb,
             restaurantCfg: { tableSize: 10 },
             logger: stubLogger,
             metrics: stubMetrics,
         });
-        await expect(reserve({ quantity: 8, date: "12/12/12" })).rejects.toThrow("connection refused");
+        await expect(reserve({ quantity: 8, date: "12/12/12" })).rejects.toThrow(
+            "connection refused",
+        );
     });
 
     it("calls logger.error when db.saveReservation throws", async () => {
         const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-        const reserve = makeReserve({
+        const { reserve } = makeRestaurant({
             db: failingDb,
             restaurantCfg: { tableSize: 10 },
             logger: mockLogger,
@@ -161,7 +166,7 @@ describe("reserve — db error", () => {
 
     it("increments reservation.error metric when db.saveReservation throws", async () => {
         const mockMetrics = { increment: vi.fn(), timing: vi.fn() };
-        const reserve = makeReserve({
+        const { reserve } = makeRestaurant({
             db: failingDb,
             restaurantCfg: { tableSize: 10 },
             logger: stubLogger,
@@ -173,7 +178,7 @@ describe("reserve — db error", () => {
 
     it("records a timing even when db.saveReservation throws", async () => {
         const mockMetrics = { increment: vi.fn(), timing: vi.fn() };
-        const reserve = makeReserve({
+        const { reserve } = makeRestaurant({
             db: failingDb,
             restaurantCfg: { tableSize: 10 },
             logger: stubLogger,
@@ -190,7 +195,7 @@ describe("reserve — db error", () => {
 describe("reserve — metrics", () => {
     it("increments reservation.accepted on acceptance", async () => {
         const mockMetrics = { increment: vi.fn(), timing: vi.fn() };
-        const reserve = makeReserve({
+        const { reserve } = makeRestaurant({
             db: stubDb,
             restaurantCfg: { tableSize: 10 },
             logger: stubLogger,
@@ -204,7 +209,7 @@ describe("reserve — metrics", () => {
 
     it("increments reservation.rejected on rejection", async () => {
         const mockMetrics = { increment: vi.fn(), timing: vi.fn() };
-        const reserve = makeReserve({
+        const { reserve } = makeRestaurant({
             db: stubDb,
             restaurantCfg: { tableSize: 10 },
             logger: stubLogger,
@@ -218,7 +223,7 @@ describe("reserve — metrics", () => {
 
     it("records a timing on acceptance", async () => {
         const mockMetrics = { increment: vi.fn(), timing: vi.fn() };
-        const reserve = makeReserve({
+        const { reserve } = makeRestaurant({
             db: stubDb,
             restaurantCfg: { tableSize: 10 },
             logger: stubLogger,
@@ -235,7 +240,7 @@ describe("reserve — metrics", () => {
 
     it("records a timing on rejection", async () => {
         const mockMetrics = { increment: vi.fn(), timing: vi.fn() };
-        const reserve = makeReserve({
+        const { reserve } = makeRestaurant({
             db: stubDb,
             restaurantCfg: { tableSize: 10 },
             logger: stubLogger,

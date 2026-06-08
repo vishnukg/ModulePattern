@@ -6,18 +6,19 @@ How the `make*` factory pattern, barrel files, and `compose.ts` fit together.
 
 ## 1. The `make*` factory pattern
 
-Every operation in this project is built by a `make*` function:
+Each port in this project is built by a `make*` function — named for the **noun**
+it produces, with its operations exposed as **methods** (the verbs):
 
 ```
-make*(dependencies) → operation(runtimeArgs) → result
+make*(dependencies) → port  →  port.operation(runtimeArgs) → result
 ```
 
 The `make*` function is called once during wiring (in `compose.ts`).
-The returned operation is what's called at runtime — once per request.
+The returned port's methods are what get called at runtime — once per request.
 
 ```ts
-// src/restaurant/domain/reservation/reserve.ts
-const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
+// src/restaurant/domain/makeRestaurant.ts
+const makeRestaurant = ({ db, restaurantCfg, logger, metrics }: MakeRestaurantCfg): Restaurant => {
     const reserve = async ({
         quantity,
         date,
@@ -28,15 +29,18 @@ const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
         }
         return "Rejected";
     };
-    return reserve;
+    // ... cancel, update, getReservations defined the same way ...
+    return { reserve, cancel, update, getReservations };
 };
 ```
 
-`makeReserve` does not import `db` — it receives it as a parameter. This is
-**Functional Dependency Injection**: dependencies are arguments, not imports.
+`makeRestaurant` does not import `db` — it receives it as a parameter. This is
+**Functional Dependency Injection**: dependencies are arguments, not imports. The
+four operations are **methods on the `Restaurant`** rather than four separate
+factories, because they are verbs that belong to one noun.
 
 For the full name, history, FP connections (partial application, Reader monad),
-and known trade-offs of this pattern, see
+the make-vs-compose rule, and known trade-offs of this pattern, see
 [10-factory-function-pattern.md](./10-factory-function-pattern.md).
 
 ---
@@ -47,13 +51,7 @@ As a module grows beyond one file, a barrel (`index.ts`) controls what
 the outside world can see. Internal implementation files stay private.
 
 ```ts
-// src/restaurant/domain/reservation/index.ts  — reservation operations
-export { default as makeReserve } from "./reserve.ts";
-export { default as makeCancel }  from "./makeCancel.ts";
-export { default as makeUpdate }  from "./makeUpdate.ts";
-
 // src/restaurant/domain/index.ts  — domain barrel
-export * from "./reservation/index.ts";
 export { default as makeRestaurant } from "./makeRestaurant.ts";
 export type { Reservation, ReservationInput, RestaurantCfg, Restaurant, ... } from "./types.ts";
 
@@ -65,7 +63,7 @@ export * from "./ports/index.ts";
 Callers import by name from the top-level core barrel:
 
 ```ts
-import { makeReserve, makeCancel, makeUpdate, makeRestaurant } from "./restaurant/index.ts";
+import { makeRestaurant } from "./restaurant/index.ts";
 import type { RestaurantCfg, DB, Logger, Metrics } from "./restaurant/index.ts";
 ```
 
@@ -77,45 +75,21 @@ explicitly in import paths — Node.js ESM does not auto-resolve directories.
 
 ---
 
-## 3. Composition — assemble the domain once, wrap it per entry point
+## 3. Composition — build the domain, wrap it per entry point
 
-The domain is wired together in exactly **one** place — `composeRestaurant` —
-which both entry points reuse. It builds each operation from its driven ports
-(`db`, `logger`, `metrics`) and bundles them into the `Restaurant` port:
-
-```ts
-// src/restaurant/domain/composeRestaurant.ts  — the single domain assembly
-const composeRestaurant = ({
-    db,
-    logger,
-    metrics,
-    restaurantCfg,
-}: ComposeRestaurantCfg): Restaurant => {
-    const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
-    const cancel = makeCancel({ db, logger, metrics });
-    const update = makeUpdate({ db, logger, metrics, restaurantCfg });
-    const getReservations = makeGetReservations({ db });
-    return makeRestaurant({ reserve, cancel, update, getReservations });
-};
-```
-
-Each entry point then has a thin **composition root** (`compose.ts`) that calls
-`composeRestaurant` and wraps the result with the one thing that differs: its
-**driving adapter** (an HTTP router vs. a CLI).
+The domain is one factory — `makeRestaurant` — that builds the `Restaurant` port
+from its driven ports (`db`, `logger`, `metrics`). Each entry point has a thin
+**composition root** (`compose.ts`) that builds the restaurant and wraps it with
+the one thing that differs: its **driving adapter** (an HTTP router vs. a CLI).
 
 ```ts
 // src/server/compose.ts
 const composeServerApp = ({ restaurantCfg, logger, metrics, db, port = 3000 }: ServerAppCfg) => {
-    const restaurant = composeRestaurant({ db, logger, metrics, restaurantCfg });
+    const restaurant = makeRestaurant({ db, logger, metrics, restaurantCfg });
     const router = makeRestaurantRouter({ restaurant });
+    const app = makeRestaurantServer({ router, logger });
 
-    const listen = () => {
-        const app = express();
-        app.use(express.json());
-        app.use("/api", router);
-        app.listen(port, () => logger.info("server started", { port }));
-    };
-
+    const listen = (onReady) => app.listen(port, () => onReady(port));
     return { listen };
 };
 ```
@@ -123,23 +97,23 @@ const composeServerApp = ({ restaurantCfg, logger, metrics, db, port = 3000 }: S
 ```ts
 // src/cli/compose.ts
 const composeCliApp = ({ restaurantCfg, logger, metrics, db }: CliAppCfg) => {
-    const restaurant = composeRestaurant({ db, logger, metrics, restaurantCfg });
+    const restaurant = makeRestaurant({ db, logger, metrics, restaurantCfg });
     const cli = makeRestaurantCli({ restaurant });
 
     return { cli };
 };
 ```
 
-The domain wiring lives in `composeRestaurant`; change how operations connect
-(add one, pass a new dependency) and you edit it **once** — both entry points
-follow. What's left in each `compose*` is genuinely entry-point-specific: the
-server exposes `listen`, the CLI exposes `cli`, and the only structural
-difference between them is HTTP router vs. CLI driving adapter.
+Both entry points build the domain the same way (`makeRestaurant({ ... })`) and
+differ only in their driving adapter: the server wraps it in an HTTP router and
+exposes `listen`; the CLI wraps it in a CLI adapter and exposes `cli`. Change how
+an operation behaves and you edit `makeRestaurant` **once** — both entry points
+follow, because both depend only on the `Restaurant` port.
 
 Each `compose*` returns exactly the capability its entry point drives — `{ listen }`
 for the server, `{ cli }` for the CLI. (A `compose*` _can_ return a named bag of
 several peers when an entry point needs more than one; here each needs just one.)
-Integration tests skip the transport entirely and call `composeRestaurant`
+Integration tests skip the transport entirely and call `makeRestaurant`
 directly for a `Restaurant` to exercise (see `tests/reservation.test.ts`). The
 entry point (`index.ts`) owns all infrastructure decisions:
 
@@ -194,7 +168,8 @@ it("calls db.saveReservation with the reservation on acceptance", async () => {
         ...stubDb,
         saveReservation: vi.fn(async (input) => ({ id: "mock-id", ...input })),
     };
-    const reserve = makeReserve({
+    // Build the Restaurant and destructure the one operation under test.
+    const { reserve } = makeRestaurant({
         db: mockDb,
         restaurantCfg: { tableSize: 10 },
         logger: stubLogger,
@@ -222,20 +197,20 @@ Each test creates exactly what it needs, nothing more.
 
 In each compose function, every `make*` call runs exactly once — every
 service is a **singleton within a single compose call**. Two calls to
-`composeRestaurant()` produce two fully independent sets of services.
+`makeRestaurant()` produce two fully independent restaurants.
 
 This is important for tests: each test that wires modules directly gets
 a fresh `db` with an empty store.
 
 ```ts
 // Each call creates a fresh in-memory store — tests never interfere
-const r1 = composeRestaurant({
+const r1 = makeRestaurant({
     restaurantCfg: { tableSize: 10 },
     logger,
     metrics,
     db: makeInMemoryDb({ logger, generateId: randomUUID }),
 });
-const r2 = composeRestaurant({
+const r2 = makeRestaurant({
     restaurantCfg: { tableSize: 10 },
     logger,
     metrics,

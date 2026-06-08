@@ -164,8 +164,8 @@ The outer `make*` call configures the function once (at startup).
 The inner function is what's called at runtime (once per request).
 
 ```ts
-// src/restaurant/domain/reservation/reserve.ts
-const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
+// src/restaurant/domain/makeRestaurant.ts
+const makeRestaurant = ({ db, restaurantCfg, logger, metrics }: MakeRestaurantCfg): Restaurant => {
     const reserve = async ({
         quantity,
         date,
@@ -176,29 +176,24 @@ const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
         }
         return "Rejected";
     };
-    return reserve;
+    // ... cancel, update, getReservations defined the same way ...
+    return { reserve, cancel, update, getReservations };
 };
 ```
 
-`reserve` does not import `db` — it receives it as an argument. This means
-in tests you can pass a fake `db` without touching real infrastructure.
+`reserve` does not import `db` — it closes over the `db` handed to
+`makeRestaurant`. This means in tests you can pass a fake `db` without touching
+real infrastructure.
 
-`composeRestaurant` calls all the domain `make*` functions once, wires the
-results into the `Restaurant` port, and each entry point's `compose.ts` reuses
-it before handing the result to its transport (HTTP or CLI):
+Each entry point's `compose.ts` calls `makeRestaurant` once to build the
+`Restaurant` port, then hands it to its transport (HTTP or CLI):
 
 ```ts
-// src/restaurant/domain/composeRestaurant.ts
-const composeRestaurant = ({
-    db,
-    logger,
-    metrics,
-    restaurantCfg,
-}: ComposeRestaurantCfg): Restaurant => {
-    const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
-    const cancel = makeCancel({ db, logger, metrics });
-    const update = makeUpdate({ db, logger, metrics, restaurantCfg });
-    const getReservations = makeGetReservations({ db });
-    return makeRestaurant({ reserve, cancel, update, getReservations });
+// src/server/compose.ts
+const composeServerApp = ({ db, logger, metrics, restaurantCfg, port }: ServerAppCfg) => {
+    const restaurant = makeRestaurant({ db, logger, metrics, restaurantCfg });
+    const router = makeRestaurantRouter({ restaurant });
+    const app = makeRestaurantServer({ router, logger });
+    return { listen: (onReady) => app.listen(port, () => onReady(port)) };
 };
 ```

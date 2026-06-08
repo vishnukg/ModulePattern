@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import request from "supertest";
 import makeRestaurantRouter from "../src/restaurant/adapters/http/makeRestaurantRouter.ts";
 import makeRestaurantServer from "../src/restaurant/adapters/http/makeRestaurantServer.ts";
-import makeSilentLogger from "./helpers/silentLogger.ts";
+import makeSilentLogger from "./helpers/makeSilentLogger.ts";
 import type { Restaurant } from "../src/restaurant/index.ts";
 import type { Logger } from "../src/restaurant/index.ts";
 
@@ -352,9 +352,9 @@ describe("GET /api/reservations — infrastructure error", () => {
 
 describe("DELETE /api/reservations/:id — infrastructure error", () => {
     it("returns 500 when restaurant.cancel throws", async () => {
-        const response = await request(
-            composeTestApp(makeThrowingRestaurant("cancel")),
-        ).delete("/api/reservations/some-id");
+        const response = await request(composeTestApp(makeThrowingRestaurant("cancel"))).delete(
+            "/api/reservations/some-id",
+        );
 
         expect(response.status).toBe(500);
         expect(response.body).toEqual({ error: "Internal server error" });

@@ -2,7 +2,7 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { randomUUID } from "node:crypto";
 import composeServerApp, { readPort } from "./compose.ts";
-import makeConsoleLogger from "../restaurant/adapters/logger/consoleLogger.ts";
+import makeConsoleLogger from "../restaurant/adapters/logger/makeConsoleLogger.ts";
 import makeNoOpMetrics from "../restaurant/adapters/metrics/makeNoOpMetrics.ts";
 import makeInMemoryDb from "../restaurant/adapters/db/makeInMemoryDb.ts";
 import makeDynamoDb from "../restaurant/adapters/db/makeDynamoDb.ts";

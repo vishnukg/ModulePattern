@@ -1,4 +1,4 @@
-import { composeRestaurant } from "../restaurant/index.ts";
+import { makeRestaurant } from "../restaurant/index.ts";
 import makeRestaurantCli from "../restaurant/adapters/cli/makeRestaurantCli.ts";
 import type { RestaurantCfg, DB, Logger, Metrics } from "../restaurant/index.ts";
 
@@ -10,7 +10,7 @@ type CliAppCfg = {
 };
 
 const composeCliApp = ({ restaurantCfg, logger, metrics, db }: CliAppCfg) => {
-    const restaurant = composeRestaurant({ db, logger, metrics, restaurantCfg });
+    const restaurant = makeRestaurant({ db, logger, metrics, restaurantCfg });
     const cli = makeRestaurantCli({ restaurant });
 
     return { cli };

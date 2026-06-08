@@ -25,7 +25,7 @@ Start here, then read the files in order.
 | Ports and adapters             | `DB`, `Restaurant`, `Logger`, `Metrics` are ports; everything in `adapters/` satisfies them |
 | Inward dependency rule         | `adapters/` depends on `domain/` — never the other way                                      |
 | Composition roots              | `src/server/compose.ts`, `src/cli/compose.ts` — one per entry point                         |
-| Functional DI                  | `makeReserve({ db, logger, metrics })` — deps as parameters                                 |
+| Functional DI                  | `makeRestaurant({ db, logger, metrics })` — deps as parameters                              |
 | Stubs vs mocks                 | Stubs: plain objects; mocks: `vi.fn()` only when asserting on calls                         |
 | AAA test pattern               | Every test — Arrange / Act / Assert, no shared `beforeEach` state                           |
 | Barrel files                   | `src/restaurant/index.ts` — single public barrel; re-exports all domain + port types        |

@@ -31,17 +31,18 @@ Both should depend on abstractions (interfaces).
 
 **Where it lives in this codebase:**
 
-`reserve.ts` is high-level (it contains business logic). It does not import
+`makeRestaurant` is high-level (it contains business logic). It does not import
 `makeInMemoryDb` or `makeDynamoDb`. It only knows about the `DB` interface:
 
 ```ts
-// src/restaurant/domain/reservation/reserve.ts
-const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
-  const reserve = async ({ quantity, date }: Reservation) => {
+// src/restaurant/domain/makeRestaurant.ts
+const makeRestaurant = ({ db, restaurantCfg, logger, metrics }: MakeRestaurantCfg) => {
+  const reserve = async ({ quantity, date }: ReservationInput) => {
     await db.saveReservation({ quantity, date });  // ← calls the interface, not an implementation
     ...
   };
-  return reserve;
+  // ... cancel, update, getReservations ...
+  return { reserve, cancel, update, getReservations };
 };
 ```
 
@@ -147,8 +148,8 @@ Without this pattern, business logic becomes entangled with infrastructure.
 Testing requires a real database. Changing from DynamoDB to PostgreSQL touches
 business logic files.
 
-With ports and adapters, the domain is a pure island. You can read `reserve.ts`,
-`makeCancel.ts`, and `makeUpdate.ts` and understand all the business rules without
+With ports and adapters, the domain is a pure island. You can read
+`makeRestaurant.ts` and understand all the business rules without
 knowing anything about AWS, Express, or `console.log`.
 
 **How to apply it:**
@@ -176,14 +177,14 @@ Every `import` points toward the core. Nothing in the core imports an adapter.
 
    ports/db.ts        ←──────────────────┬── adapters/db/makeInMemoryDb.ts
    ports/logger.ts    ←──────────────────┼── adapters/db/makeDynamoDb.ts
-   ports/metrics.ts   ←──────────────────┼── adapters/logger/consoleLogger.ts
-   domain/  (reserve, ←──────────────────┼── adapters/http/makeRestaurantRouter.ts
-    cancel, update)                       ├── server/compose.ts
+   ports/metrics.ts   ←──────────────────┼── adapters/logger/makeConsoleLogger.ts
+   domain/            ←──────────────────┼── adapters/http/makeRestaurantRouter.ts
+    makeRestaurant.ts                     ├── server/compose.ts
                                           └── cli/compose.ts
 ```
 
 - `domain/` imports `DB`, `Logger`, `Metrics` (abstract interfaces from `ports/`).
-  It does not import `consoleLogger.ts`, `makeDynamoDb.ts`, or `express`.
+  It does not import `makeConsoleLogger.ts`, `makeDynamoDb.ts`, or `express`.
 - `adapters/db/makeInMemoryDb.ts` imports `Reservation` (from `domain/types.ts`) and
   `DB` (from `ports/db.ts`). It imports _toward_ the core.
 
@@ -334,40 +335,21 @@ cross-cutting dependencies (logger, db, metrics).
 
 **Where it lives in this codebase:**
 
-The domain itself is assembled in one shared helper, `composeRestaurant`, so the
-operation wiring is never duplicated. Each entry point then has a thin
-composition root — `src/server/compose.ts` for the HTTP server, `src/cli/compose.ts`
-for the CLI — that calls `composeRestaurant` and wraps it with its own driving
-adapter. All take their deps as required parameters — no defaults, no
-infrastructure decisions inside them:
+The domain itself is one factory, `makeRestaurant`, so the operations are built
+in one place. Each entry point then has a thin composition root —
+`src/server/compose.ts` for the HTTP server, `src/cli/compose.ts` for the CLI —
+that calls `makeRestaurant` and wraps it with its own driving adapter. All take
+their deps as required parameters — no defaults, no infrastructure decisions
+inside them:
 
 ```ts
-// src/restaurant/domain/composeRestaurant.ts  — domain wired in one place
-const composeRestaurant = ({
-    db,
-    logger,
-    metrics,
-    restaurantCfg,
-}: ComposeRestaurantCfg): Restaurant => {
-    const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
-    const cancel = makeCancel({ db, logger, metrics });
-    const update = makeUpdate({ db, logger, metrics, restaurantCfg });
-    const getReservations = makeGetReservations({ db });
-    return makeRestaurant({ reserve, cancel, update, getReservations });
-};
-
-// src/server/compose.ts  — reuses it, adds the HTTP transport
+// src/server/compose.ts  — builds the domain, adds the HTTP transport
 const composeServerApp = ({ restaurantCfg, logger, metrics, db, port = 3000 }: ServerAppCfg) => {
-    const restaurant = composeRestaurant({ db, logger, metrics, restaurantCfg });
+    const restaurant = makeRestaurant({ db, logger, metrics, restaurantCfg });
     const router = makeRestaurantRouter({ restaurant });
+    const app = makeRestaurantServer({ router, logger });
 
-    const listen = () => {
-        const app = express();
-        app.use(express.json());
-        app.use("/api", router);
-        app.listen(port, () => logger.info("server started", { port }));
-    };
-
+    const listen = (onReady) => app.listen(port, () => onReady(port));
     return { listen };
 };
 ```
@@ -417,27 +399,28 @@ The outer function (`make*`) takes dependencies and returns the inner function
 **Where it lives in this codebase:**
 
 ```ts
-// src/restaurant/domain/reservation/reserve.ts
-const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
-  //                  ↑ dependencies declared here, as parameters
+// src/restaurant/domain/makeRestaurant.ts
+const makeRestaurant = ({ db, restaurantCfg, logger, metrics }: MakeRestaurantCfg) => {
+  //                     ↑ dependencies declared here, as parameters
 
-  const reserve = async ({ quantity, date }: Reservation) => {
-    //            ↑ this is the function callers actually use
+  const reserve = async ({ quantity, date }: ReservationInput) => {
+    //            ↑ a method callers actually use
     //              it closes over db, logger, metrics from the outer scope
     await db.saveReservation({ quantity, date });
     ...
   };
 
-  return reserve;
+  // ... cancel, update, getReservations ...
+  return { reserve, cancel, update, getReservations };
 };
 ```
 
 The naming convention is consistent across every module:
 
-- The outer function is `make<OperationName>` — it takes deps and returns the operation
-- The inner function is named after the operation — it's what the caller invokes
+- The outer function is `make<Noun>` — it takes deps and returns the port (a noun)
+- The port's methods are named after the operations (verbs) — what callers invoke
 
-This pattern applies to `makeReserve`, `makeRestaurant`, `makeRestaurantRouter`,
+This pattern applies to `makeRestaurant`, `makeRestaurantRouter`,
 `makeInMemoryDb`, `makeDynamoDb`, `makeConsoleLogger`, `makeNoOpMetrics`.
 
 **Why it matters:**
@@ -447,7 +430,7 @@ the module. A function that receives its dependencies as parameters can be teste
 by simply passing different values in. No module mocking required.
 
 It also makes the dependency graph explicit and visible. Reading the parameter list
-of `makeReserve` tells you exactly what it needs to operate.
+of `makeRestaurant` tells you exactly what it needs to operate.
 
 **How to apply it:**
 
@@ -464,7 +447,7 @@ Pass concrete implementations only at the composition root.
 
 **Where it lives in this codebase:**
 
-`reserve.ts` declares `db: DB`, not `db: ReturnType<typeof makeInMemoryDb>`.
+`makeRestaurant` declares `db: DB`, not `db: ReturnType<typeof makeInMemoryDb>`.
 `makeRestaurantRouter` takes `restaurant: Restaurant`, not the actual restaurant object type.
 
 In tests, stubs satisfy the same interface:
@@ -646,8 +629,8 @@ not in `src/` — they are not production code:
 ```
 tests/
   helpers/
-    fakeMetrics.ts    ← test double: records calls for assertions
-    silentLogger.ts   ← test double: discards all log output
+    makeFakeMetrics.ts    ← test double: records calls for assertions
+    makeSilentLogger.ts   ← test double: discards all log output
 ```
 
 No production code imports from `tests/helpers/`.
@@ -655,7 +638,7 @@ No production code imports from `tests/helpers/`.
 **Why it matters:**
 
 Keeping test infrastructure in `src/` blurs the line between what ships and what
-doesn't. It can confuse new contributors who see `fakeMetrics.ts` in the source
+doesn't. It can confuse new contributors who see `makeFakeMetrics.ts` in the source
 tree and don't know whether it's used in production. It makes the production
 dependency graph look larger than it is.
 

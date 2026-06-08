@@ -86,8 +86,8 @@ Key things to notice:
   The caller (business logic) gets back the saved record — useful for responses.
 - `[...store]` in `getReservations` returns a **copy** of the array. Callers can't
   accidentally mutate the internal state.
-- `cancelReservation` returns `boolean` (found or not). The domain layer (`makeCancel`)
-  translates that into `"Cancelled" | "NotFound"` — the DB stays neutral.
+- `cancelReservation` returns `boolean` (found or not). The domain layer
+  (`restaurant.cancel`) translates that into `"Cancelled" | "NotFound"` — the DB stays neutral.
 - All methods are `async` even though there's no real I/O. The interface is always
   async because real databases are async — we match that from day one so nothing
   needs to change when we swap implementations.
@@ -213,7 +213,7 @@ and no knowledge of environment variables:
 ```ts
 // src/server/compose.ts
 const composeServerApp = ({ restaurantCfg, logger, metrics, db, port = 3000 }: ServerAppCfg) => {
-  const restaurant = composeRestaurant({ db, logger, metrics, restaurantCfg });
+  const restaurant = makeRestaurant({ db, logger, metrics, restaurantCfg });
   ...
 };
 ```
@@ -300,7 +300,7 @@ const stubDb: DB = {
 };
 ```
 
-Because `makeReserve` depends on the `DB` _interface_, not on `makeInMemoryDb` or
+Because `makeRestaurant` depends on the `DB` _interface_, not on `makeInMemoryDb` or
 `makeDynamoDb` directly, the test can supply any object that has the right shape.
 This is why the tests are fast (no I/O) and reliable (no network).
 

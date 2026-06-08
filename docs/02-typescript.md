@@ -183,7 +183,7 @@ interface FakeMetrics extends Metrics {
 `FakeMetrics` satisfies the `Metrics` contract — you can pass it anywhere
 `Metrics` is expected. This is how test doubles work in this project.
 
-`makeFakeMetrics` (in `tests/helpers/fakeMetrics.ts`) returns a `FakeMetrics`.
+`makeFakeMetrics` (in `tests/helpers/makeFakeMetrics.ts`) returns a `FakeMetrics`.
 The production code receives it typed as `Metrics` — it has no idea the
 test double is storing counters internally.
 
@@ -270,10 +270,10 @@ listen();
 ```
 
 Integration tests don't go through the server at all — they call
-`composeRestaurant` directly, which returns the `Restaurant` port (captured
+`makeRestaurant` directly, which returns the `Restaurant` port (captured
 directly, no destructuring needed):
 
 ```ts
-const restaurant = composeRestaurant({ db, logger, metrics, restaurantCfg });
+const restaurant = makeRestaurant({ db, logger, metrics, restaurantCfg });
 await restaurant.reserve({ quantity: 2, date: "2024-12-01" });
 ```

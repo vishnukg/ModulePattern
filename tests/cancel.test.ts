@@ -1,7 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
-import { makeCancel } from "../src/restaurant/index.ts";
+import { makeRestaurant } from "../src/restaurant/index.ts";
 import type { DB } from "../src/restaurant/index.ts";
 import type { Logger, Metrics } from "../src/restaurant/index.ts";
+
+// cancel is a method of Restaurant — each test builds a restaurant from its deps
+// and destructures the one operation under test. cancel ignores tableSize.
 
 const stubDb: DB = {
     saveReservation: async (input) => ({ id: "stub-id", ...input }),
@@ -12,9 +15,10 @@ const stubDb: DB = {
 const stubLogger: Logger = { info: () => {}, warn: () => {}, error: () => {} };
 const stubMetrics: Metrics = { increment: () => {}, timing: () => {} };
 
-describe("makeCancel — cancellation logic", () => {
+describe("cancel — cancellation logic", () => {
     it("returns Cancelled when the reservation exists", async () => {
-        const cancel = makeCancel({
+        const { cancel } = makeRestaurant({
+            restaurantCfg: { tableSize: 10 },
             db: stubDb,
             logger: stubLogger,
             metrics: stubMetrics,
@@ -24,7 +28,8 @@ describe("makeCancel — cancellation logic", () => {
 
     it("returns NotFound when the reservation does not exist", async () => {
         const db: DB = { ...stubDb, cancelReservation: async () => false };
-        const cancel = makeCancel({
+        const { cancel } = makeRestaurant({
+            restaurantCfg: { tableSize: 10 },
             db,
             logger: stubLogger,
             metrics: stubMetrics,
@@ -33,13 +38,14 @@ describe("makeCancel — cancellation logic", () => {
     });
 });
 
-describe("makeCancel — db interaction", () => {
+describe("cancel — db interaction", () => {
     it("calls db.cancelReservation with the id", async () => {
         const mockDb: DB = {
             ...stubDb,
             cancelReservation: vi.fn(async () => true),
         };
-        const cancel = makeCancel({
+        const { cancel } = makeRestaurant({
+            restaurantCfg: { tableSize: 10 },
             db: mockDb,
             logger: stubLogger,
             metrics: stubMetrics,
@@ -51,10 +57,11 @@ describe("makeCancel — db interaction", () => {
     });
 });
 
-describe("makeCancel — logging", () => {
+describe("cancel — logging", () => {
     it("calls logger.info on successful cancellation", async () => {
         const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-        const cancel = makeCancel({
+        const { cancel } = makeRestaurant({
+            restaurantCfg: { tableSize: 10 },
             db: stubDb,
             logger: mockLogger,
             metrics: stubMetrics,
@@ -69,7 +76,8 @@ describe("makeCancel — logging", () => {
     it("calls logger.warn when not found", async () => {
         const db: DB = { ...stubDb, cancelReservation: async () => false };
         const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-        const cancel = makeCancel({
+        const { cancel } = makeRestaurant({
+            restaurantCfg: { tableSize: 10 },
             db,
             logger: mockLogger,
             metrics: stubMetrics,
@@ -81,7 +89,7 @@ describe("makeCancel — logging", () => {
     });
 });
 
-describe("makeCancel — db error", () => {
+describe("cancel — db error", () => {
     const dbError = new Error("connection refused");
     const failingDb: DB = {
         ...stubDb,
@@ -91,13 +99,23 @@ describe("makeCancel — db error", () => {
     };
 
     it("re-throws when db.cancelReservation throws", async () => {
-        const cancel = makeCancel({ db: failingDb, logger: stubLogger, metrics: stubMetrics });
+        const { cancel } = makeRestaurant({
+            restaurantCfg: { tableSize: 10 },
+            db: failingDb,
+            logger: stubLogger,
+            metrics: stubMetrics,
+        });
         await expect(cancel("any-id")).rejects.toThrow("connection refused");
     });
 
     it("calls logger.error when db.cancelReservation throws", async () => {
         const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-        const cancel = makeCancel({ db: failingDb, logger: mockLogger, metrics: stubMetrics });
+        const { cancel } = makeRestaurant({
+            restaurantCfg: { tableSize: 10 },
+            db: failingDb,
+            logger: mockLogger,
+            metrics: stubMetrics,
+        });
         await expect(cancel("any-id")).rejects.toThrow();
         expect(mockLogger.error).toHaveBeenCalledWith(
             "db error cancelling reservation",
@@ -107,14 +125,24 @@ describe("makeCancel — db error", () => {
 
     it("increments reservation.cancel.error metric when db.cancelReservation throws", async () => {
         const mockMetrics = { increment: vi.fn(), timing: vi.fn() };
-        const cancel = makeCancel({ db: failingDb, logger: stubLogger, metrics: mockMetrics });
+        const { cancel } = makeRestaurant({
+            restaurantCfg: { tableSize: 10 },
+            db: failingDb,
+            logger: stubLogger,
+            metrics: mockMetrics,
+        });
         await expect(cancel("any-id")).rejects.toThrow();
         expect(mockMetrics.increment).toHaveBeenCalledWith("reservation.cancel.error");
     });
 
     it("records a timing even when db.cancelReservation throws", async () => {
         const mockMetrics = { increment: vi.fn(), timing: vi.fn() };
-        const cancel = makeCancel({ db: failingDb, logger: stubLogger, metrics: mockMetrics });
+        const { cancel } = makeRestaurant({
+            restaurantCfg: { tableSize: 10 },
+            db: failingDb,
+            logger: stubLogger,
+            metrics: mockMetrics,
+        });
         await expect(cancel("any-id")).rejects.toThrow();
         expect(mockMetrics.timing).toHaveBeenCalledWith(
             "reservation.cancel_ms",
@@ -123,10 +151,11 @@ describe("makeCancel — db error", () => {
     });
 });
 
-describe("makeCancel — metrics", () => {
+describe("cancel — metrics", () => {
     it("increments reservation.cancelled on success", async () => {
         const mockMetrics = { increment: vi.fn(), timing: vi.fn() };
-        const cancel = makeCancel({
+        const { cancel } = makeRestaurant({
+            restaurantCfg: { tableSize: 10 },
             db: stubDb,
             logger: stubLogger,
             metrics: mockMetrics,
@@ -140,7 +169,8 @@ describe("makeCancel — metrics", () => {
     it("does not increment on NotFound", async () => {
         const db: DB = { ...stubDb, cancelReservation: async () => false };
         const mockMetrics = { increment: vi.fn(), timing: vi.fn() };
-        const cancel = makeCancel({
+        const { cancel } = makeRestaurant({
+            restaurantCfg: { tableSize: 10 },
             db,
             logger: stubLogger,
             metrics: mockMetrics,
@@ -154,7 +184,8 @@ describe("makeCancel — metrics", () => {
     it("records a timing for every attempt regardless of outcome", async () => {
         const db: DB = { ...stubDb, cancelReservation: async () => false };
         const mockMetrics = { increment: vi.fn(), timing: vi.fn() };
-        const cancel = makeCancel({
+        const { cancel } = makeRestaurant({
+            restaurantCfg: { tableSize: 10 },
             db,
             logger: stubLogger,
             metrics: mockMetrics,

@@ -1,7 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
-import { makeUpdate } from "../src/restaurant/index.ts";
+import { makeRestaurant } from "../src/restaurant/index.ts";
 import type { DB } from "../src/restaurant/index.ts";
 import type { Logger, Metrics } from "../src/restaurant/index.ts";
+
+// update is a method of Restaurant — each test builds a restaurant from its deps
+// and destructures the one operation under test.
 
 const updatedReservation = { id: "stub-id", quantity: 4, date: "25/12/12" };
 
@@ -14,9 +17,9 @@ const stubDb: DB = {
 const stubLogger: Logger = { info: () => {}, warn: () => {}, error: () => {} };
 const stubMetrics: Metrics = { increment: () => {}, timing: () => {} };
 
-describe("makeUpdate — update logic", () => {
+describe("update — update logic", () => {
     it("returns Updated when the reservation exists and quantity fits", async () => {
-        const update = makeUpdate({
+        const { update } = makeRestaurant({
             db: stubDb,
             restaurantCfg: { tableSize: 10 },
             logger: stubLogger,
@@ -26,7 +29,7 @@ describe("makeUpdate — update logic", () => {
     });
 
     it("returns Rejected when quantity exceeds table size", async () => {
-        const update = makeUpdate({
+        const { update } = makeRestaurant({
             db: stubDb,
             restaurantCfg: { tableSize: 10 },
             logger: stubLogger,
@@ -36,7 +39,7 @@ describe("makeUpdate — update logic", () => {
     });
 
     it("returns Updated when quantity exactly equals table size", async () => {
-        const update = makeUpdate({
+        const { update } = makeRestaurant({
             db: stubDb,
             restaurantCfg: { tableSize: 10 },
             logger: stubLogger,
@@ -47,7 +50,7 @@ describe("makeUpdate — update logic", () => {
 
     it("returns NotFound when the reservation does not exist", async () => {
         const db: DB = { ...stubDb, updateReservation: async () => null };
-        const update = makeUpdate({
+        const { update } = makeRestaurant({
             db,
             restaurantCfg: { tableSize: 10 },
             logger: stubLogger,
@@ -57,13 +60,13 @@ describe("makeUpdate — update logic", () => {
     });
 });
 
-describe("makeUpdate — db interaction", () => {
+describe("update — db interaction", () => {
     it("calls db.updateReservation with the id and input", async () => {
         const mockDb: DB = {
             ...stubDb,
             updateReservation: vi.fn(async () => updatedReservation),
         };
-        const update = makeUpdate({
+        const { update } = makeRestaurant({
             db: mockDb,
             restaurantCfg: { tableSize: 10 },
             logger: stubLogger,
@@ -83,7 +86,7 @@ describe("makeUpdate — db interaction", () => {
             ...stubDb,
             updateReservation: vi.fn(async () => updatedReservation),
         };
-        const update = makeUpdate({
+        const { update } = makeRestaurant({
             db: mockDb,
             restaurantCfg: { tableSize: 10 },
             logger: stubLogger,
@@ -96,10 +99,10 @@ describe("makeUpdate — db interaction", () => {
     });
 });
 
-describe("makeUpdate — logging", () => {
+describe("update — logging", () => {
     it("calls logger.info on success", async () => {
         const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-        const update = makeUpdate({
+        const { update } = makeRestaurant({
             db: stubDb,
             restaurantCfg: { tableSize: 10 },
             logger: mockLogger,
@@ -114,7 +117,7 @@ describe("makeUpdate — logging", () => {
 
     it("calls logger.warn on rejection", async () => {
         const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-        const update = makeUpdate({
+        const { update } = makeRestaurant({
             db: stubDb,
             restaurantCfg: { tableSize: 10 },
             logger: mockLogger,
@@ -129,7 +132,7 @@ describe("makeUpdate — logging", () => {
     it("calls logger.warn on NotFound", async () => {
         const db: DB = { ...stubDb, updateReservation: async () => null };
         const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-        const update = makeUpdate({
+        const { update } = makeRestaurant({
             db,
             restaurantCfg: { tableSize: 10 },
             logger: mockLogger,
@@ -142,7 +145,7 @@ describe("makeUpdate — logging", () => {
     });
 });
 
-describe("makeUpdate — db error", () => {
+describe("update — db error", () => {
     const dbError = new Error("connection refused");
     const failingDb: DB = {
         ...stubDb,
@@ -152,7 +155,7 @@ describe("makeUpdate — db error", () => {
     };
 
     it("re-throws when db.updateReservation throws", async () => {
-        const update = makeUpdate({
+        const { update } = makeRestaurant({
             db: failingDb,
             restaurantCfg: { tableSize: 10 },
             logger: stubLogger,
@@ -165,7 +168,7 @@ describe("makeUpdate — db error", () => {
 
     it("calls logger.error when db.updateReservation throws", async () => {
         const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-        const update = makeUpdate({
+        const { update } = makeRestaurant({
             db: failingDb,
             restaurantCfg: { tableSize: 10 },
             logger: mockLogger,
@@ -180,7 +183,7 @@ describe("makeUpdate — db error", () => {
 
     it("increments reservation.update.error metric when db.updateReservation throws", async () => {
         const mockMetrics = { increment: vi.fn(), timing: vi.fn() };
-        const update = makeUpdate({
+        const { update } = makeRestaurant({
             db: failingDb,
             restaurantCfg: { tableSize: 10 },
             logger: stubLogger,
@@ -192,7 +195,7 @@ describe("makeUpdate — db error", () => {
 
     it("records a timing even when db.updateReservation throws", async () => {
         const mockMetrics = { increment: vi.fn(), timing: vi.fn() };
-        const update = makeUpdate({
+        const { update } = makeRestaurant({
             db: failingDb,
             restaurantCfg: { tableSize: 10 },
             logger: stubLogger,
@@ -206,10 +209,10 @@ describe("makeUpdate — db error", () => {
     });
 });
 
-describe("makeUpdate — metrics", () => {
+describe("update — metrics", () => {
     it("increments reservation.update.accepted on success", async () => {
         const mockMetrics = { increment: vi.fn(), timing: vi.fn() };
-        const update = makeUpdate({
+        const { update } = makeRestaurant({
             db: stubDb,
             restaurantCfg: { tableSize: 10 },
             logger: stubLogger,
@@ -223,7 +226,7 @@ describe("makeUpdate — metrics", () => {
 
     it("increments reservation.update.rejected on rejection", async () => {
         const mockMetrics = { increment: vi.fn(), timing: vi.fn() };
-        const update = makeUpdate({
+        const { update } = makeRestaurant({
             db: stubDb,
             restaurantCfg: { tableSize: 10 },
             logger: stubLogger,
@@ -237,7 +240,7 @@ describe("makeUpdate — metrics", () => {
 
     it("records a timing on success", async () => {
         const mockMetrics = { increment: vi.fn(), timing: vi.fn() };
-        const update = makeUpdate({
+        const { update } = makeRestaurant({
             db: stubDb,
             restaurantCfg: { tableSize: 10 },
             logger: stubLogger,
@@ -254,7 +257,7 @@ describe("makeUpdate — metrics", () => {
 
     it("records a timing on rejection", async () => {
         const mockMetrics = { increment: vi.fn(), timing: vi.fn() };
-        const update = makeUpdate({
+        const { update } = makeRestaurant({
             db: stubDb,
             restaurantCfg: { tableSize: 10 },
             logger: stubLogger,

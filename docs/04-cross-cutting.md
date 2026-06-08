@@ -47,7 +47,7 @@ export interface FakeMetrics extends Metrics {
 ```
 
 These interfaces describe _what_ the concern does, with no knowledge of
-_how_ it does it. `reserve.ts` knows about `Logger` and `Metrics` —
+_how_ it does it. `makeRestaurant` knows about `Logger` and `Metrics` —
 it knows nothing about consoles, StatsD, DataDog, or any specific tool.
 
 `FakeMetrics extends Metrics` means it satisfies the `Metrics` contract
@@ -58,7 +58,7 @@ inspection methods used in tests.
 
 ## 3. Concrete implementations
 
-**Console logger** — for production (`src/restaurant/adapters/logger/consoleLogger.ts`):
+**Console logger** — for production (`src/restaurant/adapters/logger/makeConsoleLogger.ts`):
 
 ```ts
 export default (): Logger => ({
@@ -68,7 +68,7 @@ export default (): Logger => ({
 });
 ```
 
-**Silent logger** — for tests, suppresses all output (`tests/helpers/silentLogger.ts`):
+**Silent logger** — for tests, suppresses all output (`tests/helpers/makeSilentLogger.ts`):
 
 ```ts
 const makeSilentLogger = (): Logger => ({
@@ -78,7 +78,7 @@ const makeSilentLogger = (): Logger => ({
 });
 ```
 
-**Fake metrics** — for tests, stores results in memory (`tests/helpers/fakeMetrics.ts`):
+**Fake metrics** — for tests, stores results in memory (`tests/helpers/makeFakeMetrics.ts`):
 
 ```ts
 const makeFakeMetrics = (): FakeMetrics => {
@@ -113,11 +113,11 @@ has no knowledge they exist.
 
 ## 4. Injecting into a module
 
-`reserve.ts` receives `logger` and `metrics` as part of its deps object
-and calls them at the right moments:
+`makeRestaurant` receives `logger` and `metrics` as part of its deps object
+and its operations call them at the right moments:
 
 ```ts
-const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
+const makeRestaurant = ({ db, restaurantCfg, logger, metrics }: MakeRestaurantCfg) => {
     const reserve = async ({ quantity, date }: ReservationInput) => {
         const start = Date.now();
         logger.info("reservation attempt", { quantity, date });
@@ -139,11 +139,12 @@ const makeReserve = ({ db, restaurantCfg, logger, metrics }: ReserveCfg) => {
         });
         return "Rejected";
     };
-    return reserve;
+    // ... cancel, update, getReservations defined the same way ...
+    return { reserve, cancel, update, getReservations };
 };
 ```
 
-`reserve.ts` contains no `import` for any logging library. The business
+`makeRestaurant` contains no `import` for any logging library. The business
 logic (`quantity <= restaurantCfg.tableSize`) is unchanged. Cross-cutting
 concerns are woven in via the deps object.
 
@@ -162,7 +163,7 @@ const db      = makeInMemoryDb({ logger, generateId: randomUUID }); // or makeDy
 
 // src/server/compose.ts — pure wiring, no defaults
 const composeServerApp = ({ restaurantCfg, logger, metrics, db, port = 3000 }: ServerAppCfg) => {
-  const restaurant = composeRestaurant({ db, logger, metrics, restaurantCfg });
+  const restaurant = makeRestaurant({ db, logger, metrics, restaurantCfg });
   ...
 };
 ```
@@ -183,13 +184,13 @@ in, and keep your reference. When `reserve` calls `metrics.increment(...)`,
 it calls methods on _your_ instance.
 
 ```ts
-import makeFakeMetrics from "./helpers/fakeMetrics.ts";
-import makeSilentLogger from "./helpers/silentLogger.ts";
-import { makeReserve } from "../src/restaurant/index.ts";
+import makeFakeMetrics from "./helpers/makeFakeMetrics.ts";
+import makeSilentLogger from "./helpers/makeSilentLogger.ts";
+import { makeRestaurant } from "../src/restaurant/index.ts";
 
 it("increments reservation.accepted on a successful reservation", async () => {
     const metrics = makeFakeMetrics();
-    const reserve = makeReserve({
+    const { reserve } = makeRestaurant({
         db: stubDb,
         restaurantCfg: { tableSize: 12 },
         logger: makeSilentLogger(),
@@ -212,7 +213,7 @@ You can also assert on timing:
 ```ts
 it("records a timing for every attempt regardless of outcome", async () => {
     const metrics = makeFakeMetrics();
-    const reserve = makeReserve({
+    const { reserve } = makeRestaurant({
         db: stubDb,
         restaurantCfg: { tableSize: 12 },
         logger: makeSilentLogger(),
@@ -257,6 +258,7 @@ res.status(result === "Accepted" ? 201 : 422).json({ result });
 ### Infrastructure failures (thrown errors)
 
 Domain operations wrap every DB call in a try/catch. On failure they:
+
 1. Increment an error metric (`reservation.error`, `reservation.cancel.error`, …)
 2. Record a timing so dashboards stay accurate even on the error path
 3. Call `logger.error` with the operation context (id, quantity, date, message)

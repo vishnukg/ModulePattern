@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import makeFakeMetrics from "./helpers/fakeMetrics.ts";
+import makeFakeMetrics from "./helpers/makeFakeMetrics.ts";
 
 describe("fakeMetrics — counters", () => {
     it("returns 0 for an unrecorded counter", () => {

@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { randomUUID } from "node:crypto";
-import { composeRestaurant } from "../src/restaurant/index.ts";
+import { makeRestaurant } from "../src/restaurant/index.ts";
 import makeInMemoryDb from "../src/restaurant/adapters/db/makeInMemoryDb.ts";
-import makeSilentLogger from "./helpers/silentLogger.ts";
-import makeFakeMetrics from "./helpers/fakeMetrics.ts";
+import makeSilentLogger from "./helpers/makeSilentLogger.ts";
+import makeFakeMetrics from "./helpers/makeFakeMetrics.ts";
 
 const silent = () => makeSilentLogger();
 const fake = () => makeFakeMetrics();
@@ -11,7 +11,7 @@ const db = () => makeInMemoryDb({ logger: makeSilentLogger(), generateId: random
 
 describe("reservations are accepted if we have enough seats at the table", () => {
     it("reserve(10) returns Accepted", async () => {
-        const restaurant = composeRestaurant({
+        const restaurant = makeRestaurant({
             restaurantCfg: { tableSize: 12 },
             logger: silent(),
             metrics: fake(),
@@ -21,7 +21,7 @@ describe("reservations are accepted if we have enough seats at the table", () =>
     });
 
     it("reserve(12) returns Accepted", async () => {
-        const restaurant = composeRestaurant({
+        const restaurant = makeRestaurant({
             restaurantCfg: { tableSize: 12 },
             logger: silent(),
             metrics: fake(),
@@ -31,7 +31,7 @@ describe("reservations are accepted if we have enough seats at the table", () =>
     });
 
     it("reserve(13) returns Rejected", async () => {
-        const restaurant = composeRestaurant({
+        const restaurant = makeRestaurant({
             restaurantCfg: { tableSize: 12 },
             logger: silent(),
             metrics: fake(),
@@ -44,7 +44,7 @@ describe("reservations are accepted if we have enough seats at the table", () =>
 describe("metrics are recorded on each reservation attempt", () => {
     it("increments reservation.accepted on a successful reservation", async () => {
         const metrics = fake();
-        const restaurant = composeRestaurant({
+        const restaurant = makeRestaurant({
             restaurantCfg: { tableSize: 12 },
             logger: silent(),
             metrics,
@@ -59,7 +59,7 @@ describe("metrics are recorded on each reservation attempt", () => {
 
     it("increments reservation.rejected when quantity exceeds table size", async () => {
         const metrics = fake();
-        const restaurant = composeRestaurant({
+        const restaurant = makeRestaurant({
             restaurantCfg: { tableSize: 12 },
             logger: silent(),
             metrics,
@@ -74,7 +74,7 @@ describe("metrics are recorded on each reservation attempt", () => {
 
     it("records a timing for every attempt regardless of outcome", async () => {
         const metrics = fake();
-        const restaurant = composeRestaurant({
+        const restaurant = makeRestaurant({
             restaurantCfg: { tableSize: 12 },
             logger: silent(),
             metrics,
@@ -94,7 +94,7 @@ describe("metrics are recorded on each reservation attempt", () => {
 
     it("counters accumulate across multiple calls", async () => {
         const metrics = fake();
-        const restaurant = composeRestaurant({
+        const restaurant = makeRestaurant({
             restaurantCfg: { tableSize: 12 },
             logger: silent(),
             metrics,

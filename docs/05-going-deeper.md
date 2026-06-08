@@ -101,22 +101,16 @@ closure — they travel with the function wherever it goes.
 
 #### One `make*` function per file
 
-Each file exports a single default `make*` function.
-The filename is the function name (minus the `make` prefix for ops,
-full name for factories).
+Each file exports a single default `make*` function, named for the **noun** it
+produces. The filename is the function name.
 
 ```
 src/restaurant/
   index.ts                ← public barrel (re-exports everything below)
   domain/
-    reservation/          ← all reservation operations grouped here
-      reserve.ts            ← makeReserve
-      makeCancel.ts         ← makeCancel
-      makeUpdate.ts         ← makeUpdate
-      index.ts              ← reservation barrel
-    makeRestaurant.ts     ← makeRestaurant
+    makeRestaurant.ts     ← makeRestaurant (reserve/cancel/update/list as methods)
     types.ts              ← Reservation, Restaurant, RestaurantCfg, ...
-    index.ts              ← domain barrel (re-exports reservation + types)
+    index.ts              ← domain barrel (re-exports makeRestaurant + types)
   ports/
     db.ts                 ← DB interface (driven port)
     logger.ts             ← Logger interface (driven port)
@@ -128,7 +122,7 @@ src/restaurant/adapters/
     makeInMemoryDb.ts
     makeDynamoDb.ts
   logger/
-    consoleLogger.ts
+    makeConsoleLogger.ts
   metrics/
     makeNoOpMetrics.ts
   http/                   ← driving adapter for the HTTP server
@@ -138,14 +132,14 @@ src/restaurant/adapters/
     makeRestaurantCli.ts
 ```
 
-If you want to find `makeCancel`, open `makeCancel.ts`. Never any ambiguity.
+If you want to find `makeRestaurant`, open `makeRestaurant.ts`. Never any ambiguity.
 
 Test helpers live outside `src/` — they are not part of the application:
 
 ```
 tests/helpers/
-  fakeMetrics.ts    ← makeFakeMetrics (returns FakeMetrics)
-  silentLogger.ts   ← makeSilentLogger (returns Logger)
+  makeFakeMetrics.ts    ← makeFakeMetrics (returns FakeMetrics)
+  makeSilentLogger.ts   ← makeSilentLogger (returns Logger)
 ```
 
 #### Types co-located with their module
@@ -186,7 +180,7 @@ export * from "./ports/index.ts";
 Callers import everything by name from one place — internal file structure is hidden:
 
 ```ts
-import { makeReserve, makeCancel } from "../restaurant/index.ts";
+import { makeRestaurant } from "../restaurant/index.ts";
 import type { DB, Logger, Metrics } from "../restaurant/index.ts";
 ```
 

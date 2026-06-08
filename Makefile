@@ -50,7 +50,7 @@ fmt: ## Format the codebase with prettier (writes)
 fmt-check: ## Verify formatting without writing
 	$(RUN) npm run format:check
 
-ci: deps typecheck lint audit test build ## Everything CI runs, from a clean checkout
+ci: deps typecheck lint audit fmt-check test build ## Everything CI runs, from a clean checkout
 
 # ── Run the app (containerised) ──────────────────────────────────────────────
 

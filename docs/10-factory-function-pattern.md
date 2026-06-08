@@ -38,10 +38,10 @@ at runtime, once per request or event.
 
 ```ts
 // Wiring time — called once in compose.ts
-const reserve = makeReserve({ db, restaurantCfg, logger, metrics });
+const restaurant = makeRestaurant({ db, restaurantCfg, logger, metrics });
 
 // Runtime — called once per HTTP request
-await reserve({ quantity: 2, date: "2024-12-01" });
+await restaurant.reserve({ quantity: 2, date: "2024-12-01" });
 ```
 
 This separates two very different concerns:
@@ -75,15 +75,14 @@ for this project, from the real world (top) down to the actual work (bottom):
             │   dependencies handed DOWN
             ▼
 composeServerApp             BRANCH  (composition root)  →  returns { listen }
-├─ composeRestaurant         BRANCH  (sub-composition)   →  returns a Restaurant
-│   ├─ makeReserve           leaf
-│   ├─ makeCancel            leaf
-│   ├─ makeUpdate            leaf
-│   ├─ makeGetReservations   leaf  (thin pass-through to the DB)
-│   └─ makeRestaurant        leaf  (bundles the four operations)
+├─ makeRestaurant            leaf  (the domain — reserve/cancel/update/list inline)
 ├─ makeRestaurantRouter      leaf
 └─ makeRestaurantServer      leaf
 ```
+
+`makeRestaurant` is a single leaf: it closes over `db`/`logger`/`metrics` and
+defines all four operations (`reserve`, `cancel`, `update`, `getReservations`)
+as methods inline. It calls no other factory, so the tree stops there.
 
 Two things flow along the tree, in opposite directions and at different times —
 this is the [two-call shape](#the-two-call-shape) seen from above:
@@ -104,14 +103,14 @@ the rule before reading its precise form below.
 **🍃 Leaf = `make*` — does the actual work.**
 
 - A leaf is where photosynthesis happens: it turns inputs into something useful.
-  `makeReserve` turns a booking into `"Accepted"` / `"Rejected"`.
+  `makeRestaurant` turns a booking into `"Accepted"` / `"Rejected"`.
 - It is **fed, it doesn't forage.** A leaf has water and light delivered to it; it
-  never goes looking. `makeReserve` is _handed_ `db` / `logger`; it never imports a
-  concrete database.
+  never goes looking. `makeRestaurant` is _handed_ `db` / `logger`; it never imports
+  a concrete database.
 - It is **terminal** — nothing grows past a leaf. A `make*` calls **no other
   factory**; it's where the tree stops. (This is exactly what `npm run audit`
   checks.)
-- Leaves share one shape: `(deps) => capability`. `makeReserve`, `makeInMemoryDb`,
+- Leaves share one shape: `(deps) => capability`. `makeRestaurant`, `makeInMemoryDb`,
   `makeRestaurantRouter` — same silhouette, different work.
 
 **🌿 Branch = `compose*` — connects, but does no work of its own.**
@@ -119,8 +118,8 @@ the rule before reading its precise form below.
 - A branch doesn't photosynthesize; it **holds leaves in position** and channels
   resources to them. `composeServerApp` invents no behaviour — it arranges
   behaviour that leaves already provide.
-- Branches **carry branches**: `composeServerApp` holds `composeRestaurant` (a
-  smaller branch) _plus_ leaves. The tree nests to any depth.
+- A branch **can carry branches**: if a sub-tree ever needs its own composition
+  step, a `compose*` may call another `compose*`. The tree nests to any depth.
 - Its entire reason to exist is **connection**. Break a leaf and the app loses a
   capability; break a branch and the pieces are fine — they're just no longer
   joined.
@@ -173,110 +172,96 @@ Open the function body and ask:
 > - **No** → it's a **`make*`**. (Its work is written inline.)
 > - **Yes** → it's a **`compose*`**. (It assembles other factories.)
 
-That is the whole rule. The **return type does not matter**: a `compose*` may
-return a single named port (when it just assembles one domain) or a bag of peers
-(when it's an entry point's root). What makes it a compose is _calling other
-factories_, not what it returns.
+That is the whole rule. The **return type does not matter**: a `make*` may return
+a single function (one operation) or a multi-method object (a whole port); a
+`compose*` may return one assembled port or a bag of peers. What makes it a compose
+is _calling other factories_, not what it returns.
 
-The clearest proof is `makeRestaurant` vs `composeRestaurant` — **both return a
-`Restaurant`**, yet:
+The clearest contrast is `makeRestaurant` (a leaf) vs `composeServerApp` (a branch):
 
 ```ts
-// make: it is HANDED the operations and just bundles them → calls no factory
-const makeRestaurant = ({ reserve, cancel, update, getReservations }): Restaurant => ({
-    reserve,
-    cancel,
-    update,
-    getReservations,
-});
+// make: defines all its work INLINE → calls no factory → leaf
+const makeRestaurant = ({ db, logger, metrics, restaurantCfg }): Restaurant => {
+    const reserve = async (input) => {
+        /* capacity rule, db.saveReservation, metrics, logging — written here */
+    };
+    const cancel = async (id) => {
+        /* ... */
+    };
+    const update = async (id, input) => {
+        /* ... */
+    };
+    const getReservations = async () => {
+        /* ... */
+    };
+    return { reserve, cancel, update, getReservations };
+};
 
-// compose: it BUILDS the operations via make* factories, then bundles them
-const composeRestaurant = ({ db, logger, metrics, restaurantCfg }): Restaurant => {
-    const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
-    const cancel = makeCancel({ db, logger, metrics });
-    const update = makeUpdate({ db, logger, metrics, restaurantCfg });
-    const getReservations = makeGetReservations({ db });
-    return makeRestaurant({ reserve, cancel, update, getReservations });
+// compose: it BUILDS its parts via other factories, then wires them → branch
+const composeServerApp = ({ db, logger, metrics, restaurantCfg, port }) => {
+    const restaurant = makeRestaurant({ db, logger, metrics, restaurantCfg });
+    const router = makeRestaurantRouter({ restaurant });
+    const app = makeRestaurantServer({ router, logger });
+    return { listen: (onReady) => app.listen(port, () => onReady(port)) };
 };
 ```
 
-They look interchangeable because they return the same `Restaurant`, but they sit
-at different layers:
+|                      | `makeRestaurant`                           | `composeServerApp`                             |
+| -------------------- | ------------------------------------------ | ---------------------------------------------- |
+| **Takes in**         | raw infrastructure (`db`, `logger`, `cfg`) | the same infrastructure                        |
+| **Does**             | defines the four operations **inline**     | **builds** restaurant + router + server, wires |
+| **Returns**          | a `Restaurant` (noun)                      | a `{ listen }` bag the entry point drives      |
+| **Calls a factory?** | no → it's a **`make`** (leaf)              | yes → it's a **`compose`** (branch)            |
 
-|                      | `makeRestaurant`                     | `composeRestaurant`                                               |
-| -------------------- | ------------------------------------ | ----------------------------------------------------------------- |
-| **Takes in**         | the four finished operations         | raw infrastructure (`db`, `logger`, `metrics`, `cfg`)             |
-| **Does**             | nothing but bundle what it is handed | **builds** the operations (`makeReserve` etc.), then bundles them |
-| **Returns**          | a `Restaurant`                       | a `Restaurant`                                                    |
-| **Calls a factory?** | no → it's a **`make`** (leaf)        | yes → it's a **`compose`** (branch)                               |
+### Naming: make\* is a noun, its methods are verbs
 
-The kitchen analogy: **`makeRestaurant` is the tray** — hand it four cooked dishes
-and it arranges them into a meal; it never cooks. **`composeRestaurant` is the
-kitchen** — it takes raw ingredients (`db` / `logger` / `metrics`), cooks the four
-dishes (`makeReserve` / `makeCancel` / `makeUpdate` / `makeGetReservations`), then
-puts them on the tray.
+The prefix has a grammar that makes new names write themselves:
 
-### We wrap every domain operation — even pure pass-throughs
+- **`make*` is named for the noun it produces.** `makeRestaurant` → `Restaurant`,
+  `makeInMemoryDb` → `DB`, `makeRestaurantRouter` → `Router`. Never name a `make*`
+  after a verb — there is no `makeReserve`, because "reserve" is an action, not a
+  thing you construct.
+- **Verbs live inside, as methods.** `reserve`, `cancel`, `update`,
+  `getReservations` are methods on the `Restaurant` noun — exactly like
+  `array.push()` or `map.get()`. A verb method is always correct; a verb factory
+  never is.
+- **`compose*` is named for what it assembles** — usually an _App_
+  (`composeServerApp`, `composeCliApp`), since its job is to wire one entry point.
 
-Notice all four operations in `composeRestaurant` are built the **same way**,
-`getReservations` included:
+So the question "what do I call this?" reduces to: _what noun does it produce?_
+Prefix that noun with `make`. If instead it wires other factories together, it's a
+`compose*` named for the app it assembles.
 
-```ts
-const reserve = makeReserve({ db, logger, metrics, restaurantCfg });
-const cancel = makeCancel({ db, logger, metrics });
-const update = makeUpdate({ db, logger, metrics, restaurantCfg });
-const getReservations = makeGetReservations({ db }); // ← even this one
-return makeRestaurant({ reserve, cancel, update, getReservations });
-```
+### The domain is one module — operations are its methods
 
-`getReservations` is the odd one out behaviourally: it adds **no** domain logic
-today. Listing reservations is exactly what the database already does, and
-`db.getReservations` is already the domain's signature (`() => Promise<Reservation[]>`),
-so its factory is a one-line wrapper:
+`makeRestaurant` defines all four operations in **one** closure rather than four
+separate `make*` factories. That is deliberate:
 
-```ts
-const makeGetReservations =
-    ({ db }: { db: DB }): GetReservationsFn =>
-    () =>
-        db.getReservations();
-```
+- **One factory, one noun.** The domain _is_ the `Restaurant`. Its operations are
+  verbs that belong to it, so they live inside it as methods — not as four
+  standalone nouns that then have to be re-bundled.
+- **One rule to apply.** "Build the noun; verbs are its methods." There is no
+  second decision about whether each operation gets its own file, its own factory,
+  or a pass-through wrapper.
+- **The seam is already there.** When an operation needs more — a filter on
+  `getReservations`, a new dependency on `update` — you add it _inside_
+  `makeRestaurant`; every call site stays unchanged because they only ever touched
+  `restaurant.update(...)`.
 
-We **could** have skipped it and wired `db.getReservations` straight through. We
-wrap it anyway, on purpose, for two reasons:
-
-- **One rule, not two.** Every domain operation is a `make*` factory — no "is this
-  one wrapped, or passed straight through?" exception to carry in your head when
-  reading or writing `composeRestaurant`.
-- **The seam is already there.** The day `getReservations` needs a filter,
-  pagination, an audit log, or a metric, you add it _inside_ `makeGetReservations`
-  — `composeRestaurant` and every call site stay byte-for-byte unchanged.
-
-The other three were never optional: each genuinely **transforms** the DB's raw
-result into the domain's vocabulary, so the factory was always doing real work.
-
-| Domain op         | DB method it uses      | What its factory adds                                                                      |
-| ----------------- | ---------------------- | ------------------------------------------------------------------------------------------ |
-| `reserve`         | `db.saveReservation`   | the capacity rule (`quantity ≤ tableSize`) → `"Accepted"` / `"Rejected"`, metrics, logging |
-| `cancel`          | `db.cancelReservation` | maps the DB's `boolean` → `"Cancelled"` / `"NotFound"`, metrics, logging                   |
-| `update`          | `db.updateReservation` | maps `Reservation \| null` → `"Updated"` / `"Rejected"` / `"NotFound"`, the capacity rule  |
-| `getReservations` | `db.getReservations`   | **nothing today** — wrapped for consistency and a ready extension seam                     |
-
-**The rule:** every domain operation gets a `make*` factory — even a pure
-pass-through. The cost is one trivial wrapper; the payoff is a single uniform rule
-and a place for behaviour to land later. (Minimalism — wiring pass-throughs
-straight through and skipping the wrapper — is the valid alternative; this project
-chooses consistency.)
+The trade-off is honest: you can no longer construct a single operation in
+isolation (`makeReserve(...)`) — you build the whole `Restaurant` and call the one
+method. In practice tests do exactly that (`const { reserve } = makeRestaurant(...)`),
+and the gain is fewer files and a single naming rule. (The alternative — one `make*`
+per operation, assembled by a `composeRestaurant` — is equally valid; this project
+chose the single-module form for simplicity.)
 
 ### This repo, function by function
 
-| Function                                                         | Kind       | Why                                                                                          |
-| ---------------------------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------- |
-| `makeReserve`, `makeCancel`, `makeUpdate`                        | `make*`    | define the operation inline from `db`/`logger`/`metrics`                                     |
-| `makeGetReservations`                                            | `make*`    | thin pass-through to `db.getReservations` — wrapped for consistency (see above)              |
-| `makeRestaurant`                                                 | `make*`    | bundles operations it is **handed** — calls no factory                                       |
-| `makeInMemoryDb`, `makeRestaurantRouter`, `makeRestaurantCli`, … | `make*`    | define their behaviour inline                                                                |
-| `composeRestaurant`                                              | `compose*` | calls `makeReserve` / `makeCancel` / `makeUpdate` / `makeGetReservations` / `makeRestaurant` |
-| `composeServerApp`, `composeCliApp`                              | `compose*` | call `composeRestaurant` + a driving adapter, return a bag of peers                          |
+| Function                                                                                                                                      | Kind       | Why                                                                     |
+| --------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ----------------------------------------------------------------------- |
+| `makeRestaurant`                                                                                                                              | `make*`    | defines `reserve`/`cancel`/`update`/`getReservations` inline → leaf     |
+| `makeInMemoryDb`, `makeDynamoDb`, `makeRestaurantRouter`, `makeRestaurantCli`, `makeRestaurantServer`, `makeConsoleLogger`, `makeNoOpMetrics` | `make*`    | each defines its behaviour inline → leaf                                |
+| `composeServerApp`, `composeCliApp`                                                                                                           | `compose*` | call `makeRestaurant` + a driving adapter, return the entry point's bag |
 
 ### A third kind: plain functions
 
@@ -298,45 +283,104 @@ that move the same guarantee into the compiler instead.
 
 ## Why this beats classes for this use case
 
-A class mixes construction and operation in the same `this`:
+From the _outside_, a factory and a class look the same — both hand you an object
+whose methods you call. That similarity is the point: the consumer only sees the
+`Restaurant` port and doesn't care how it was built. The differences are all in
+**construction and internal mechanics**, and for dependency-injected, long-lived
+services they fall the factory's way. The honest framing is not "factories beat
+classes" — it's "factories drop the three things classes drag along (`this`,
+`new`, inheritance) that this use case doesn't need."
+
+A class mixes construction and operation through a shared `this`:
 
 ```ts
-class ReservationService {
+class Restaurant {
     constructor(
-        private db: Db,
+        private db: DB,
         private cfg: RestaurantCfg,
     ) {}
 
     async reserve(input: ReservationInput) {
-        // db and cfg accessed via this
+        await this.db.saveReservation(input); // ← reaches deps via `this`
     }
 }
 ```
 
-A factory separates them cleanly:
+A factory captures deps in a closure instead:
 
 ```ts
-const makeReserve = ({ db, cfg }: ReserveCfg) => {
+const makeRestaurant = ({ db, restaurantCfg }: MakeRestaurantCfg) => {
     const reserve = async (input: ReservationInput) => {
-        // db and cfg captured in closure — no this
+        await db.saveReservation(input); // ← reaches deps via closure — no `this`
     };
-    return reserve;
+    return { reserve /* , cancel, update, getReservations */ };
 };
 ```
 
-The factory approach wins on three counts:
+### 1. No `this`-binding bugs — and this repo's tests rely on it
 
-**No `this` binding bugs.** `this` in JavaScript is context-dependent.
-Destructuring a method off a class instance can silently break it. Closures
-never have this problem — the captured variable is always the same reference.
+`this` is bound by _how a method is called_, not where it's defined. Detach a
+class method from its instance and it breaks:
 
-**Dependencies are visible at the boundary.** The `ReserveCfg` type declares
-exactly what the operation needs. You cannot accidentally access something
-not listed there.
+```ts
+const r = new Restaurant(db, cfg);
+const { reserve } = r; // detached from the instance
+await reserve(input); // 💥 TypeError: cannot read 'saveReservation' of undefined
+```
 
-**Cheap and honest testing.** You wire up a test instance by calling the
-factory with test doubles. No mocking framework, no `new Service(mock1,
-mock2)`. The factory is just a function.
+You'd need `r.reserve.bind(r)`, or to always call `r.reserve(...)`. Every time a
+method is passed as a callback — `arr.map(r.reserve)`, an Express handler, an event
+listener — you're exposed to this.
+
+The factory has no such failure mode, which is exactly why the tests in this repo
+can write:
+
+```ts
+const { reserve } = makeRestaurant({ db, logger, metrics, restaurantCfg });
+await reserve({ quantity: 8, date: "12/12/12" }); // ✓ closure, not `this`
+```
+
+### 2. Genuinely private dependencies
+
+In the factory, `db` and `logger` live in the closure — there is no
+`restaurant.db`, ever. With a class, `private db` is only a _compile-time_ fiction
+in TypeScript: `(restaurant as any).db` reaches it at runtime. (True-private `#db`
+fields exist, but this project's `erasableSyntaxOnly` tsconfig bans
+`constructor(private db: DB)` parameter properties — they emit runtime code — so
+the class version is also more verbose here.)
+
+### 3. Dependencies are visible as a plain type
+
+`MakeRestaurantCfg` _is_ the contract: read it and you know exactly what the domain
+needs. No scanning a constructor body, no decorators, no DI container. And because
+the result is just an object satisfying `Restaurant` (structural typing), a test
+double is a plain object literal — no `implements`, no subclass, no mock framework:
+
+```ts
+const stubRestaurant: Restaurant = { reserve: async () => "Accepted" /* … */ };
+```
+
+### 4. It's just a function
+
+No `new`, so factories compose like any other function — partial application,
+passing them around, returning them. `makeRestaurant({ db, logger })` is partial
+application: fix the deps now, supply runtime args later (see
+[the FP connection](#connection-to-functional-programming) below).
+
+### Where classes actually win
+
+This is a trade-off, not a slam dunk. Reach for a class when:
+
+- **You create very many short-lived instances.** A class shares its methods on the
+  prototype across all instances; each factory call allocates a fresh closure with
+  fresh function objects. See [Memory and GC](#memory-and-gc-the-honest-cost-of-closures)
+  below — it's a real cost in hot paths, irrelevant for startup-time singletons.
+- **You need `instanceof`, real inheritance, or polymorphic hierarchies.**
+- **The ecosystem expects classes** — NestJS, TypeORM entities, decorator-based DI.
+- **Your team simply reasons better in classes.** Familiarity is a real cost too.
+
+For the wiring layer in this project — a handful of services built once at
+startup — none of those apply, so the factory's gains come essentially for free.
 
 ---
 
@@ -344,9 +388,9 @@ mock2)`. The factory is just a function.
 
 ### Partial application
 
-Calling `makeReserve({ db, cfg })` is **partial application**: you fix
-the dependency arguments now so the returned function only needs the
-runtime arguments later.
+Calling `makeRestaurant({ db, restaurantCfg, logger, metrics })` is **partial
+application**: you fix the dependency arguments now so the returned operations
+only need the runtime arguments later.
 
 Strict currying (`fn(a)(b)(c)`) is the mathematical version. Partial
 application (fixing a group of arguments at once via a config object) is
@@ -358,7 +402,7 @@ In typed functional languages (Haskell, F#), the formal equivalent is the
 **Reader monad**: a computation that depends on a shared environment. Your
 factory is the same idea without the monad machinery.
 
-`makeReserve({ db, cfg })` ≈ `Reader.ask(env => useEnv(env))` — the
+`makeRestaurant({ db, cfg })` ≈ `Reader.ask(env => useEnv(env))` — the
 environment is injected once, the computation sees it from then on.
 
 If you later use `fp-ts` or `effect-ts`, the Reader pattern will feel
@@ -384,10 +428,10 @@ This project is that idea applied to TypeScript.
 
 ```ts
 // Good — names are visible at the call site
-const reserve = makeReserve({ db, restaurantCfg, logger });
+const restaurant = makeRestaurant({ db, restaurantCfg, logger, metrics });
 
 // Bad — positional, caller must read the signature to know order
-const reserve = makeReserve(db, restaurantCfg, logger);
+const restaurant = makeRestaurant(db, restaurantCfg, logger, metrics);
 ```
 
 **Outputs** follow two rules depending on the function type:
@@ -398,27 +442,23 @@ when the port is a multi-method interface, that is an object:
 
 ```ts
 // Single-operation port — the function IS the port
-const makeReserve = (cfg: ReserveCfg): ReserveFn => {
-    return async (input) => {
-        /* ... */
-    };
+const makeNoOpMetrics = (): Metrics => {
+    return { increment: () => {}, timing: () => {} };
 };
-const reserve = makeReserve({ db, restaurantCfg, logger, metrics });
+const metrics = makeNoOpMetrics();
 
-// Multi-method port — the object IS the port
-const makeInMemoryDb = (cfg: InMemoryDbCfg): DB => {
-    return { saveReservation, getReservations, cancelReservation, updateReservation };
+// Multi-method port — the object IS the port (its methods are the verbs)
+const makeRestaurant = (cfg: MakeRestaurantCfg): Restaurant => {
+    return { reserve, cancel, update, getReservations };
 };
-const db = makeInMemoryDb({ logger, generateId });
+const restaurant = makeRestaurant({ db, restaurantCfg, logger, metrics });
 ```
 
-`compose*` functions return **whatever the caller needs** — sometimes a single
-assembled port (when the job is just to build one thing), sometimes a named bag
-of peers (when an entry point needs several). Each entry-point root here returns
-the one capability its `index.ts` drives:
+`compose*` functions return a **named bag** of the capabilities their entry point
+drives — `{ listen }` for the server, `{ cli }` for the CLI:
 
 ```ts
-// Composition roots — each returns the single capability its entry point drives
+// Composition roots — each returns the capability its entry point drives
 const composeServerApp = (cfg) => {
     // ... wiring ...
     return { listen };
@@ -428,25 +468,20 @@ const composeCliApp = (cfg) => {
     // ... wiring ...
     return { cli };
 };
-
-// Domain assembly reused by both entry points — returns the Restaurant port.
-// Integration tests call this directly to drive the domain without a transport.
-const composeRestaurant = (cfg): Restaurant => {
-    // ... builds reserve/cancel/update, bundles them ...
-    return makeRestaurant({ reserve, cancel, update, getReservations });
-};
 ```
 
-Call sites are predictable — a `compose*` that returns one port is captured
-directly; one that returns a named bag is destructured:
+Call sites destructure what they need:
 
 ```ts
-// returns a single port → capture directly
-const restaurant = composeRestaurant({ db, restaurantCfg, logger, metrics });
-
-// returns a named bag → destructure what you need
 const { listen } = composeServerApp({ restaurantCfg, logger, metrics, db, port });
 const { cli } = composeCliApp({ restaurantCfg, logger, metrics, db });
+```
+
+The domain itself is built by `makeRestaurant` (a `make*`, returned directly),
+which integration tests call to drive the domain without a transport:
+
+```ts
+const restaurant = makeRestaurant({ db, restaurantCfg, logger, metrics });
 ```
 
 ---
@@ -454,8 +489,7 @@ const { cli } = composeCliApp({ restaurantCfg, logger, metrics, db });
 ## Where the pattern lives in this project
 
 ```text
-src/restaurant/domain/                    ← business operations (pure domain logic)
-src/restaurant/domain/composeRestaurant.ts ← assembles the domain once (reused by both entry points)
+src/restaurant/domain/makeRestaurant.ts   ← the domain — one factory, four operations as methods
 src/restaurant/ports/                     ← interfaces (what each factory depends on)
 src/restaurant/adapters/                  ← concrete implementations (db, http, queue)
 src/server/compose.ts                     ← composition root for the HTTP server
@@ -471,7 +505,7 @@ the Ports and Adapters (Hexagonal Architecture) pattern at the wiring layer.
 
 ## Known trade-offs
 
-**Not a singleton by default.** Each call to `makeReserve(...)` creates a
+**Not a singleton by default.** Each call to `makeRestaurant(...)` creates a
 new closure. If you need a single shared instance, call it once in
 `compose.ts` and pass the result around — which is exactly what this project
 does.
@@ -481,10 +515,139 @@ scanning for decorators. You wire manually in `compose.ts`. This is more
 verbose in a large codebase but completely transparent — you can always read
 the composition root and trace every dependency.
 
-**Closure memory.** Each factory call allocates a new closure scope. For
-service-level objects created once at startup this is irrelevant. For
-factories called thousands of times per second to create short-lived objects,
-prefer plain functions with explicit arguments instead.
+**Closure memory.** Each factory call allocates a new closure and a fresh set of
+method functions. For service-level objects created once at startup this is
+irrelevant; in hot paths it is not. This is the one place classes have a genuine
+performance edge — see [Memory and GC](#memory-and-gc-the-honest-cost-of-closures).
+
+---
+
+## Memory and GC: the honest cost of closures
+
+This is worth understanding precisely rather than worrying about vaguely, because
+the answer is "it almost never matters here, and when it does there's a simple fix."
+
+### Why a closure costs more than a class instance
+
+A **class** defines its methods **once**, on the prototype. A thousand instances
+share the same `reserve` function object; each instance is just a small record of
+fields plus a pointer to the shared prototype.
+
+A **factory** defines its methods **inside the call**, so they close over that
+call's variables. Every call to `makeRestaurant(...)` creates:
+
+1. a new closure scope holding `db`, `logger`, `metrics`, `restaurantCfg`, and
+2. **brand-new function objects** for `reserve`, `cancel`, `update`,
+   `getReservations` — one fresh set per call.
+
+```ts
+const a = makeRestaurant(deps);
+const b = makeRestaurant(deps);
+a.reserve === b.reserve; // false — two distinct function objects
+
+class C {
+    reserve() {}
+}
+new C().reserve === new C().reserve; // true — shared on the prototype
+```
+
+So N factory instances allocate N × (closure + 4 functions); N class instances
+allocate N small objects sharing 4 prototype methods. More allocation up front,
+and more for the garbage collector to reclaim when those instances die.
+
+### Why it doesn't matter in this project
+
+Every factory here is called **once, at startup**, in a `compose.ts`. One
+`Restaurant`, one `DB`, one `Router` — they live for the whole process. The "per
+instance" cost is paid a handful of times, total. The closures also _are_ the
+encapsulation you want, so the allocation is buying something. **For long-lived
+singletons, the factory pattern has no meaningful memory downside.**
+
+The cost only becomes real when you call a factory **on a hot path** — e.g. once
+per request, or in a tight loop, creating millions of short-lived instances. Then
+the per-call allocation of four fresh function objects shows up as GC pressure.
+
+### How to optimize a `make*` when it _is_ on a hot path
+
+In order of preference:
+
+**1. Don't put a factory on the hot path — hoist it.** This is almost always the
+real fix. Build the object once outside the loop/handler and reuse it. It's what
+`compose.ts` already does: `makeRestaurant` runs at startup, and every request
+reuses the same `restaurant`.
+
+```ts
+// ✗ rebuilds the closure + 4 functions on every request
+app.post("/reservations", async (req, res) => {
+    const restaurant = makeRestaurant(deps);
+    res.json(await restaurant.reserve(req.body));
+});
+
+// ✓ build once, reuse — zero per-request factory allocation
+const restaurant = makeRestaurant(deps);
+app.post("/reservations", async (req, res) => {
+    res.json(await restaurant.reserve(req.body));
+});
+```
+
+**2. If you truly need a new instance per call, drop the closure — use a plain
+function that takes deps as arguments.** No closure is captured, no per-instance
+method objects are created; the function is defined once and you pass state in:
+
+```ts
+// One function object for the whole process; "instance" state passed explicitly.
+const reserve = (deps: ReserveDeps, input: ReservationInput) => {
+    /* ... */
+};
+
+// hot path: no allocation beyond the arguments
+await reserve(deps, input);
+```
+
+This is the top row of the [spectrum below](#when-to-choose-something-else) —
+"plain functions, deps as params." You trade the tidy `restaurant.reserve(x)`
+call site for `reserve(deps, x)`, but allocate nothing per call.
+
+**3. If you need many instances _and_ shared methods _and_ `instanceof` — use a
+class.** This is precisely the case classes are built for: methods on the
+prototype, minimal per-instance footprint. Don't force the factory pattern where a
+class is the right tool.
+
+### Don't micro-optimize on faith — measure
+
+Modern V8 is extremely good at closures: it optimizes hot closures, and short-lived
+objects die in the cheap young generation of the GC. For the overwhelming majority
+of code — anything not in a measured hot loop — the factory's allocation is noise.
+Reach for options 2 or 3 only when a profiler points at factory allocation as a
+real cost, not preemptively.
+
+### Is this production-safe?
+
+For **this** codebase: yes, and the factory closures are not the thing to watch.
+
+Every `make*` here is called **once, at startup**, in `compose.ts` / `index.ts` —
+one `Restaurant`, one `DB`, one `Router`, built when the server boots and reused
+for the whole process. Per request, Express invokes the already-built handlers,
+which call the already-built `restaurant.reserve` (the same function object every
+time). **No factory runs per request; no closure is recreated.** The per-instance
+allocation is paid ~once per service, ever — kilobytes at boot, below noise. A
+class-based version would save those kilobytes once and change nothing at request
+time, because the only per-request allocations (the parsed body, the log payload)
+are identical in both styles.
+
+The one thing that would move closure allocation onto the hot path is calling a
+`make*` **inside** a request handler or loop (option 1 above) — which this code
+does not do, and the [factory audit](#this-rule-is-enforced-not-just-documented)
+plus the composition-root structure steer you away from.
+
+So the honest production checklist puts closures last. The real scaling watch-items
+in this code live elsewhere:
+
+- **`makeDynamoDb.getReservations` uses `ScanCommand`** — a full-table scan whose
+  cost and latency grow with the table. This is the genuine production concern;
+  replace it with a query/pagination strategy before the table gets large.
+- **`makeInMemoryDb` is not a production store** — it's process memory: single
+  instance, lost on restart. The DynamoDB adapter is the production path.
 
 ---
 
