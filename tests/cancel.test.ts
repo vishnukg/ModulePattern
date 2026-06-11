@@ -145,7 +145,7 @@ describe("cancel — db error", () => {
         });
         await expect(cancel("any-id")).rejects.toThrow();
         expect(mockMetrics.timing).toHaveBeenCalledWith(
-            "reservation.cancel_ms",
+            "reservation.cancel.duration_ms",
             expect.any(Number),
         );
     });
@@ -163,7 +163,7 @@ describe("cancel — metrics", () => {
 
         await cancel("any-id");
 
-        expect(mockMetrics.increment).toHaveBeenCalledWith("reservation.cancelled");
+        expect(mockMetrics.increment).toHaveBeenCalledWith("reservation.cancel.cancelled");
     });
 
     it("does not increment on NotFound", async () => {
@@ -196,7 +196,7 @@ describe("cancel — metrics", () => {
 
         expect(mockMetrics.timing).toHaveBeenCalledTimes(2);
         expect(mockMetrics.timing).toHaveBeenCalledWith(
-            "reservation.cancel_ms",
+            "reservation.cancel.duration_ms",
             expect.any(Number),
         );
     });

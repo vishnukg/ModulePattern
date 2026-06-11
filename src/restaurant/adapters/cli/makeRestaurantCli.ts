@@ -1,12 +1,14 @@
 import type { Restaurant, ReservationInput } from "../../index.ts";
 
-type RestaurantCliCfg = { restaurant: Restaurant };
+// tableSize is static config, injected once like every other dependency — it only
+// exists here so reserve can render it, never to make decisions (that's the domain's job).
+type RestaurantCliCfg = { restaurant: Restaurant; tableSize: number };
 
 // The terminal-facing surface, mirroring the four operations the HTTP router exposes.
 // Each method returns a single line of text rather than writing to stdout — the entry
 // point (cli/index.ts) owns argv and printing; this owns the CLI↔domain translation.
 export type RestaurantCli = {
-    reserve: (input: ReservationInput, tableSize: number) => Promise<string>;
+    reserve: (input: ReservationInput) => Promise<string>;
     cancel: (id: string) => Promise<string>;
     update: (id: string, input: ReservationInput) => Promise<string>;
     getReservations: () => Promise<string>;
@@ -17,8 +19,8 @@ export type RestaurantCli = {
 // counterpart of makeRestaurantRouter (the HTTP driving adapter): same job, different
 // transport. The entry point (cli/index.ts) reads argv and prints; this owns the
 // translation between CLI-land and the domain.
-const makeRestaurantCli = ({ restaurant }: RestaurantCliCfg): RestaurantCli => {
-    const reserve = async (input: ReservationInput, tableSize: number): Promise<string> => {
+const makeRestaurantCli = ({ restaurant, tableSize }: RestaurantCliCfg): RestaurantCli => {
+    const reserve = async (input: ReservationInput): Promise<string> => {
         const result = await restaurant.reserve(input);
         return `Reservation ${result} — ${input.quantity} seat(s) on ${input.date} (table size: ${tableSize})`;
     };

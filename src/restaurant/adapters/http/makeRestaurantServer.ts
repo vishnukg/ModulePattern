@@ -6,6 +6,7 @@ import express, {
     type NextFunction,
 } from "express";
 import type { Logger } from "../../index.ts";
+import { errorMessage } from "../../../shared/errorMessage.ts";
 
 type RestaurantServerCfg = {
     router: Router;
@@ -25,7 +26,7 @@ const makeRestaurantServer = ({ router, logger }: RestaurantServerCfg): Express 
         logger.error("request failed", {
             method: req.method,
             path: req.path,
-            message: err instanceof Error ? err.message : String(err),
+            message: errorMessage(err),
         });
         res.status(500).json({ error: "Internal server error" });
     });

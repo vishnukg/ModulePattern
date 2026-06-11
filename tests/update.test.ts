@@ -203,7 +203,7 @@ describe("update — db error", () => {
         });
         await expect(update("any-id", { quantity: 4, date: "25/12/12" })).rejects.toThrow();
         expect(mockMetrics.timing).toHaveBeenCalledWith(
-            "reservation.update_ms",
+            "reservation.update.duration_ms",
             expect.any(Number),
         );
     });
@@ -250,7 +250,7 @@ describe("update — metrics", () => {
         await update("any-id", { quantity: 4, date: "25/12/12" });
 
         expect(mockMetrics.timing).toHaveBeenCalledWith(
-            "reservation.update_ms",
+            "reservation.update.duration_ms",
             expect.any(Number),
         );
     });
@@ -267,7 +267,7 @@ describe("update — metrics", () => {
         await update("any-id", { quantity: 11, date: "25/12/12" });
 
         expect(mockMetrics.timing).toHaveBeenCalledWith(
-            "reservation.update_ms",
+            "reservation.update.duration_ms",
             expect.any(Number),
         );
     });

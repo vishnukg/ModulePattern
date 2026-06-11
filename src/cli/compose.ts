@@ -11,7 +11,7 @@ type CliAppCfg = {
 
 const composeCliApp = ({ restaurantCfg, logger, metrics, db }: CliAppCfg) => {
     const restaurant = makeRestaurant({ db, logger, metrics, restaurantCfg });
-    const cli = makeRestaurantCli({ restaurant });
+    const cli = makeRestaurantCli({ restaurant, tableSize: restaurantCfg.tableSize });
 
     return { cli };
 };

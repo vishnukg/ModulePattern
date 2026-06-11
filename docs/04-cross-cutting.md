@@ -124,14 +124,14 @@ const makeRestaurant = ({ db, restaurantCfg, logger, metrics }: MakeRestaurantCf
 
         if (quantity <= restaurantCfg.tableSize) {
             await db.saveReservation({ quantity, date });
-            metrics.increment("reservation.accepted");
-            metrics.timing("reservation.duration_ms", Date.now() - start);
+            metrics.increment("reservation.reserve.accepted");
+            metrics.timing("reservation.reserve.duration_ms", Date.now() - start);
             logger.info("reservation accepted", { quantity, date });
             return "Accepted";
         }
 
-        metrics.increment("reservation.rejected");
-        metrics.timing("reservation.duration_ms", Date.now() - start);
+        metrics.increment("reservation.reserve.rejected");
+        metrics.timing("reservation.reserve.duration_ms", Date.now() - start);
         logger.warn("reservation rejected", {
             quantity,
             date,
@@ -188,7 +188,7 @@ import makeFakeMetrics from "./helpers/makeFakeMetrics.ts";
 import makeSilentLogger from "./helpers/makeSilentLogger.ts";
 import { makeRestaurant } from "../src/restaurant/index.ts";
 
-it("increments reservation.accepted on a successful reservation", async () => {
+it("increments reservation.reserve.accepted on a successful reservation", async () => {
     const metrics = makeFakeMetrics();
     const { reserve } = makeRestaurant({
         db: stubDb,
@@ -199,8 +199,8 @@ it("increments reservation.accepted on a successful reservation", async () => {
 
     await reserve({ quantity: 10, date: "2024-12-12" });
 
-    expect(metrics.getCounter("reservation.accepted")).toBe(1);
-    expect(metrics.getCounter("reservation.rejected")).toBe(0);
+    expect(metrics.getCounter("reservation.reserve.accepted")).toBe(1);
+    expect(metrics.getCounter("reservation.reserve.rejected")).toBe(0);
 });
 ```
 
@@ -223,7 +223,7 @@ it("records a timing for every attempt regardless of outcome", async () => {
     await reserve({ quantity: 10, date: "2024-12-12" });
     await reserve({ quantity: 13, date: "2024-12-12" });
 
-    expect(metrics.getTimings("reservation.duration_ms")).toHaveLength(2);
+    expect(metrics.getTimings("reservation.reserve.duration_ms")).toHaveLength(2);
 });
 ```
 
@@ -259,7 +259,7 @@ res.status(result === "Accepted" ? 201 : 422).json({ result });
 
 Domain operations wrap every DB call in a try/catch. On failure they:
 
-1. Increment an error metric (`reservation.error`, `reservation.cancel.error`, …)
+1. Increment an error metric (`reservation.reserve.error`, `reservation.cancel.error`, …)
 2. Record a timing so dashboards stay accurate even on the error path
 3. Call `logger.error` with the operation context (id, quantity, date, message)
 4. Re-throw so the error propagates to the transport layer
@@ -268,32 +268,34 @@ Domain operations wrap every DB call in a try/catch. On failure they:
 try {
     await db.saveReservation({ quantity, date });
 } catch (err) {
-    metrics.increment("reservation.error");
-    metrics.timing("reservation.duration_ms", Date.now() - start);
+    metrics.increment("reservation.reserve.error");
+    metrics.timing("reservation.reserve.duration_ms", Date.now() - start);
     logger.error("db error saving reservation", {
         quantity,
         date,
-        message: err instanceof Error ? err.message : String(err),
+        message: errorMessage(err),
     });
     throw err;
 }
 ```
 
+(`errorMessage`, in `src/shared/errorMessage.ts`, narrows the `unknown` that
+`catch` gives you — `err instanceof Error ? err.message : String(err)` — in one
+place instead of at every catch site.)
+
 ### HTTP error boundary
 
 `makeRestaurantServer` registers Express error middleware after the router.
-Route handlers use `asyncHandler` to forward any thrown error to it:
+Express 5 forwards a rejected promise from an async route handler to that
+middleware automatically — no try/catch or wrapper needed in the router:
 
 ```ts
-// asyncHandler in makeRestaurantRouter.ts
-const asyncHandler = (fn) => (req, res, next) => fn(req, res, next).catch(next);
-
 // Error middleware in makeRestaurantServer.ts
 app.use((err, req, res, _next) => {
     logger.error("request failed", {
         method: req.method,
         path: req.path,
-        message: err instanceof Error ? err.message : String(err),
+        message: errorMessage(err),
     });
     res.status(500).json({ error: "Internal server error" });
 });

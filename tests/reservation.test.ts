@@ -53,8 +53,8 @@ describe("metrics are recorded on each reservation attempt", () => {
 
         await restaurant.reserve({ quantity: 10, date: "12/12/12" });
 
-        expect(metrics.getCounter("reservation.accepted")).toBe(1);
-        expect(metrics.getCounter("reservation.rejected")).toBe(0);
+        expect(metrics.getCounter("reservation.reserve.accepted")).toBe(1);
+        expect(metrics.getCounter("reservation.reserve.rejected")).toBe(0);
     });
 
     it("increments reservation.rejected when quantity exceeds table size", async () => {
@@ -68,8 +68,8 @@ describe("metrics are recorded on each reservation attempt", () => {
 
         await restaurant.reserve({ quantity: 13, date: "12/12/12" });
 
-        expect(metrics.getCounter("reservation.rejected")).toBe(1);
-        expect(metrics.getCounter("reservation.accepted")).toBe(0);
+        expect(metrics.getCounter("reservation.reserve.rejected")).toBe(1);
+        expect(metrics.getCounter("reservation.reserve.accepted")).toBe(0);
     });
 
     it("records a timing for every attempt regardless of outcome", async () => {
@@ -84,12 +84,12 @@ describe("metrics are recorded on each reservation attempt", () => {
         await restaurant.reserve({ quantity: 10, date: "12/12/12" });
         await restaurant.reserve({ quantity: 13, date: "12/12/12" });
 
-        expect(metrics.getTimings("reservation.duration_ms")).toHaveLength(2);
+        expect(metrics.getTimings("reservation.reserve.duration_ms")).toHaveLength(2);
     });
 
     it("getTimings returns empty array before any timing is recorded", () => {
         const metrics = fake();
-        expect(metrics.getTimings("reservation.duration_ms")).toEqual([]);
+        expect(metrics.getTimings("reservation.reserve.duration_ms")).toEqual([]);
     });
 
     it("counters accumulate across multiple calls", async () => {
@@ -105,7 +105,7 @@ describe("metrics are recorded on each reservation attempt", () => {
         await restaurant.reserve({ quantity: 10, date: "12/12/12" });
         await restaurant.reserve({ quantity: 13, date: "12/12/12" });
 
-        expect(metrics.getCounter("reservation.accepted")).toBe(2);
-        expect(metrics.getCounter("reservation.rejected")).toBe(1);
+        expect(metrics.getCounter("reservation.reserve.accepted")).toBe(2);
+        expect(metrics.getCounter("reservation.reserve.rejected")).toBe(1);
     });
 });

@@ -1,7 +1,8 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { randomUUID } from "node:crypto";
-import composeServerApp, { readPort } from "./compose.ts";
+import composeServerApp, { readPort, readPositiveInt } from "./compose.ts";
+import { errorMessage } from "../shared/errorMessage.ts";
 import makeConsoleLogger from "../restaurant/adapters/logger/makeConsoleLogger.ts";
 import makeNoOpMetrics from "../restaurant/adapters/metrics/makeNoOpMetrics.ts";
 import makeInMemoryDb from "../restaurant/adapters/db/makeInMemoryDb.ts";
@@ -9,7 +10,7 @@ import makeDynamoDb from "../restaurant/adapters/db/makeDynamoDb.ts";
 import type { DB } from "../restaurant/index.ts";
 
 const port = readPort(process.env.PORT, 3000);
-const tableSize = Number(process.env.TABLE_SIZE ?? 10);
+const tableSize = readPositiveInt("TABLE_SIZE", process.env.TABLE_SIZE, 10);
 
 const logger = makeConsoleLogger();
 const metrics = makeNoOpMetrics();
@@ -17,14 +18,12 @@ const metrics = makeNoOpMetrics();
 // Safety net for any promise rejection or thrown error that escapes all
 // other boundaries. Log it, then exit so the process manager can restart cleanly.
 process.on("unhandledRejection", (reason) => {
-    logger.error("unhandled rejection", {
-        message: reason instanceof Error ? reason.message : String(reason),
-    });
+    logger.error("unhandled rejection", { message: errorMessage(reason) });
     process.exit(1);
 });
 
 process.on("uncaughtException", (err) => {
-    logger.error("uncaught exception", { message: err.message });
+    logger.error("uncaught exception", { message: errorMessage(err) });
     process.exit(1);
 });
 

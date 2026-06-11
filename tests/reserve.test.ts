@@ -173,7 +173,7 @@ describe("reserve — db error", () => {
             metrics: mockMetrics,
         });
         await expect(reserve({ quantity: 8, date: "12/12/12" })).rejects.toThrow();
-        expect(mockMetrics.increment).toHaveBeenCalledWith("reservation.error");
+        expect(mockMetrics.increment).toHaveBeenCalledWith("reservation.reserve.error");
     });
 
     it("records a timing even when db.saveReservation throws", async () => {
@@ -186,7 +186,7 @@ describe("reserve — db error", () => {
         });
         await expect(reserve({ quantity: 8, date: "12/12/12" })).rejects.toThrow();
         expect(mockMetrics.timing).toHaveBeenCalledWith(
-            "reservation.duration_ms",
+            "reservation.reserve.duration_ms",
             expect.any(Number),
         );
     });
@@ -204,7 +204,7 @@ describe("reserve — metrics", () => {
 
         await reserve({ quantity: 8, date: "12/12/12" });
 
-        expect(mockMetrics.increment).toHaveBeenCalledWith("reservation.accepted");
+        expect(mockMetrics.increment).toHaveBeenCalledWith("reservation.reserve.accepted");
     });
 
     it("increments reservation.rejected on rejection", async () => {
@@ -218,7 +218,7 @@ describe("reserve — metrics", () => {
 
         await reserve({ quantity: 11, date: "12/12/12" });
 
-        expect(mockMetrics.increment).toHaveBeenCalledWith("reservation.rejected");
+        expect(mockMetrics.increment).toHaveBeenCalledWith("reservation.reserve.rejected");
     });
 
     it("records a timing on acceptance", async () => {
@@ -233,7 +233,7 @@ describe("reserve — metrics", () => {
         await reserve({ quantity: 8, date: "12/12/12" });
 
         expect(mockMetrics.timing).toHaveBeenCalledWith(
-            "reservation.duration_ms",
+            "reservation.reserve.duration_ms",
             expect.any(Number),
         );
     });
@@ -250,7 +250,7 @@ describe("reserve — metrics", () => {
         await reserve({ quantity: 11, date: "12/12/12" });
 
         expect(mockMetrics.timing).toHaveBeenCalledWith(
-            "reservation.duration_ms",
+            "reservation.reserve.duration_ms",
             expect.any(Number),
         );
     });

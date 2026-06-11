@@ -1,5 +1,6 @@
 import type { Reservation, ReservationInput, RestaurantCfg, Restaurant } from "./types.ts";
 import type { DB, Logger, Metrics } from "../ports/index.ts";
+import { errorMessage } from "../../shared/errorMessage.ts";
 
 type MakeRestaurantCfg = {
     db: DB;
@@ -16,6 +17,10 @@ type MakeRestaurantCfg = {
 // Business failures are returned as typed values ("Rejected", "NotFound").
 // Infrastructure failures (a thrown DB call) are logged with operation context,
 // counted, and re-thrown for the transport layer to turn into a 500 / exit.
+//
+// Metric names follow one scheme: reservation.<op>.<outcome> for counters
+// (business outcomes only) and reservation.<op>.duration_ms for timings
+// (every operation, every path).
 const makeRestaurant = ({ db, logger, metrics, restaurantCfg }: MakeRestaurantCfg): Restaurant => {
     const reserve = async ({
         quantity,
@@ -28,23 +33,23 @@ const makeRestaurant = ({ db, logger, metrics, restaurantCfg }: MakeRestaurantCf
             try {
                 await db.saveReservation({ quantity, date });
             } catch (err) {
-                metrics.increment("reservation.error");
-                metrics.timing("reservation.duration_ms", Date.now() - start);
+                metrics.increment("reservation.reserve.error");
+                metrics.timing("reservation.reserve.duration_ms", Date.now() - start);
                 logger.error("db error saving reservation", {
                     quantity,
                     date,
-                    message: err instanceof Error ? err.message : String(err),
+                    message: errorMessage(err),
                 });
                 throw err;
             }
-            metrics.increment("reservation.accepted");
-            metrics.timing("reservation.duration_ms", Date.now() - start);
+            metrics.increment("reservation.reserve.accepted");
+            metrics.timing("reservation.reserve.duration_ms", Date.now() - start);
             logger.info("reservation accepted", { quantity, date });
             return "Accepted";
         }
 
-        metrics.increment("reservation.rejected");
-        metrics.timing("reservation.duration_ms", Date.now() - start);
+        metrics.increment("reservation.reserve.rejected");
+        metrics.timing("reservation.reserve.duration_ms", Date.now() - start);
         logger.warn("reservation rejected", {
             quantity,
             date,
@@ -62,22 +67,22 @@ const makeRestaurant = ({ db, logger, metrics, restaurantCfg }: MakeRestaurantCf
             found = await db.cancelReservation(id);
         } catch (err) {
             metrics.increment("reservation.cancel.error");
-            metrics.timing("reservation.cancel_ms", Date.now() - start);
+            metrics.timing("reservation.cancel.duration_ms", Date.now() - start);
             logger.error("db error cancelling reservation", {
                 id,
-                message: err instanceof Error ? err.message : String(err),
+                message: errorMessage(err),
             });
             throw err;
         }
 
-        metrics.timing("reservation.cancel_ms", Date.now() - start);
+        metrics.timing("reservation.cancel.duration_ms", Date.now() - start);
 
         if (!found) {
             logger.warn("cancellation not found", { id });
             return "NotFound";
         }
 
-        metrics.increment("reservation.cancelled");
+        metrics.increment("reservation.cancel.cancelled");
         logger.info("reservation cancelled", { id });
         return "Cancelled";
     };
@@ -89,9 +94,11 @@ const makeRestaurant = ({ db, logger, metrics, restaurantCfg }: MakeRestaurantCf
         const start = Date.now();
         logger.info("update attempt", { id, ...input });
 
+        // Capacity is checked before existence, so an oversized update on a
+        // missing id returns "Rejected" — invalid input never costs a DB call.
         if (input.quantity > restaurantCfg.tableSize) {
             metrics.increment("reservation.update.rejected");
-            metrics.timing("reservation.update_ms", Date.now() - start);
+            metrics.timing("reservation.update.duration_ms", Date.now() - start);
             logger.warn("update rejected — exceeds table size", {
                 id,
                 ...input,
@@ -105,16 +112,16 @@ const makeRestaurant = ({ db, logger, metrics, restaurantCfg }: MakeRestaurantCf
             updated = await db.updateReservation(id, input);
         } catch (err) {
             metrics.increment("reservation.update.error");
-            metrics.timing("reservation.update_ms", Date.now() - start);
+            metrics.timing("reservation.update.duration_ms", Date.now() - start);
             logger.error("db error updating reservation", {
                 id,
                 ...input,
-                message: err instanceof Error ? err.message : String(err),
+                message: errorMessage(err),
             });
             throw err;
         }
 
-        metrics.timing("reservation.update_ms", Date.now() - start);
+        metrics.timing("reservation.update.duration_ms", Date.now() - start);
 
         if (updated === null) {
             logger.warn("update not found", { id });
@@ -127,12 +134,16 @@ const makeRestaurant = ({ db, logger, metrics, restaurantCfg }: MakeRestaurantCf
     };
 
     const getReservations = async (): Promise<Reservation[]> => {
+        const start = Date.now();
         try {
-            return await db.getReservations();
+            const reservations = await db.getReservations();
+            metrics.timing("reservation.list.duration_ms", Date.now() - start);
+            return reservations;
         } catch (err) {
             metrics.increment("reservation.list.error");
+            metrics.timing("reservation.list.duration_ms", Date.now() - start);
             logger.error("db error fetching reservations", {
-                message: err instanceof Error ? err.message : String(err),
+                message: errorMessage(err),
             });
             throw err;
         }

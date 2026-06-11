@@ -13,9 +13,12 @@ const makeStubRestaurant = (overrides: Partial<Restaurant> = {}): Restaurant => 
 describe("makeRestaurantCli — reserve", () => {
     it("calls the Restaurant port with the parsed input", async () => {
         const reserve = vi.fn(async () => "Accepted" as const);
-        const cli = makeRestaurantCli({ restaurant: makeStubRestaurant({ reserve }) });
+        const cli = makeRestaurantCli({
+            restaurant: makeStubRestaurant({ reserve }),
+            tableSize: 10,
+        });
 
-        await cli.reserve({ quantity: 4, date: "2026-06-08" }, 10);
+        await cli.reserve({ quantity: 4, date: "2026-06-08" });
 
         expect(reserve).toHaveBeenCalledWith({ quantity: 4, date: "2026-06-08" });
     });
@@ -23,9 +26,10 @@ describe("makeRestaurantCli — reserve", () => {
     it("renders an accepted reservation as a line of text", async () => {
         const cli = makeRestaurantCli({
             restaurant: makeStubRestaurant({ reserve: async () => "Accepted" }),
+            tableSize: 10,
         });
 
-        const message = await cli.reserve({ quantity: 4, date: "2026-06-08" }, 10);
+        const message = await cli.reserve({ quantity: 4, date: "2026-06-08" });
 
         expect(message).toBe("Reservation Accepted — 4 seat(s) on 2026-06-08 (table size: 10)");
     });
@@ -33,9 +37,10 @@ describe("makeRestaurantCli — reserve", () => {
     it("renders a rejected reservation as a line of text", async () => {
         const cli = makeRestaurantCli({
             restaurant: makeStubRestaurant({ reserve: async () => "Rejected" }),
+            tableSize: 10,
         });
 
-        const message = await cli.reserve({ quantity: 99, date: "2026-06-08" }, 10);
+        const message = await cli.reserve({ quantity: 99, date: "2026-06-08" });
 
         expect(message).toBe("Reservation Rejected — 99 seat(s) on 2026-06-08 (table size: 10)");
     });
@@ -44,7 +49,10 @@ describe("makeRestaurantCli — reserve", () => {
 describe("makeRestaurantCli — cancel", () => {
     it("calls the Restaurant port with the id", async () => {
         const cancel = vi.fn(async () => "Cancelled" as const);
-        const cli = makeRestaurantCli({ restaurant: makeStubRestaurant({ cancel }) });
+        const cli = makeRestaurantCli({
+            restaurant: makeStubRestaurant({ cancel }),
+            tableSize: 10,
+        });
 
         await cli.cancel("abc123");
 
@@ -54,6 +62,7 @@ describe("makeRestaurantCli — cancel", () => {
     it("renders the outcome as a line of text", async () => {
         const cli = makeRestaurantCli({
             restaurant: makeStubRestaurant({ cancel: async () => "NotFound" }),
+            tableSize: 10,
         });
 
         const message = await cli.cancel("abc123");
@@ -65,7 +74,10 @@ describe("makeRestaurantCli — cancel", () => {
 describe("makeRestaurantCli — update", () => {
     it("calls the Restaurant port with the id and parsed input", async () => {
         const update = vi.fn(async () => "Updated" as const);
-        const cli = makeRestaurantCli({ restaurant: makeStubRestaurant({ update }) });
+        const cli = makeRestaurantCli({
+            restaurant: makeStubRestaurant({ update }),
+            tableSize: 10,
+        });
 
         await cli.update("abc123", { quantity: 6, date: "2026-06-09" });
 
@@ -75,6 +87,7 @@ describe("makeRestaurantCli — update", () => {
     it("renders the outcome as a line of text", async () => {
         const cli = makeRestaurantCli({
             restaurant: makeStubRestaurant({ update: async () => "Updated" }),
+            tableSize: 10,
         });
 
         const message = await cli.update("abc123", { quantity: 6, date: "2026-06-09" });
@@ -87,6 +100,7 @@ describe("makeRestaurantCli — getReservations", () => {
     it("renders an empty list", async () => {
         const cli = makeRestaurantCli({
             restaurant: makeStubRestaurant({ getReservations: async () => [] }),
+            tableSize: 10,
         });
 
         const message = await cli.getReservations();
@@ -102,6 +116,7 @@ describe("makeRestaurantCli — getReservations", () => {
                     { id: "def456", quantity: 2, date: "2026-06-09" },
                 ],
             }),
+            tableSize: 10,
         });
 
         const message = await cli.getReservations();

@@ -130,9 +130,18 @@ src/restaurant/adapters/
     makeRestaurantServer.ts
   cli/                    ← driving adapter for the terminal
     makeRestaurantCli.ts
+
+src/shared/
+  errorMessage.ts         ← errorMessage (narrows an unknown thrown value)
+  isPositiveInt.ts        ← isPositiveInt (shared validation predicate)
 ```
 
 If you want to find `makeRestaurant`, open `makeRestaurant.ts`. Never any ambiguity.
+
+`src/shared/` holds plain utilities with no domain knowledge and no
+dependencies of their own, used across layers (domain, adapters, entry
+points). Anything that knows about reservations, ports, or transports does
+**not** belong there — it stays close to its consumers, per the rule below.
 
 Test helpers live outside `src/` — they are not part of the application:
 
