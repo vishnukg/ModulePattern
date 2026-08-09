@@ -4,7 +4,7 @@ services:
     # laptop and in CI. node_modules is a named volume (not a host bind mount)
     # so native binaries are built for the container, never the host.
     node:
-        image: node:24-slim
+        build: .
         working_dir: /app
         init: true
         env_file:
